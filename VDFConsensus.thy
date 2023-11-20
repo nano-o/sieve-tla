@@ -1,7 +1,6 @@
 theory VDFConsensus
-  imports Main "HOL-Library.FSet" "HOL-Statespace.StateSpaceSyntax"
+  imports Main "HOL-Library.FSet" "HOL-Statespace.StateSpaceSyntax" "HOL-Library.State_Monad"
 begin
-
 
 section "Messages"
 
@@ -45,12 +44,19 @@ inductive_set parts :: "'a msg set \<Rightarrow> 'a msg set" for msgs where
 | "MPair m1 m2 \<in> parts msgs \<Longrightarrow> m2 \<in> parts msgs"
 | "\<lbrakk>MSet s \<in> parts msgs; m \<in> fset s\<rbrakk> \<Longrightarrow> m \<in> parts msgs"
 
-inductive_set synth :: "'a msg set \<Rightarrow> 'a msg set" for msgs where
-  \<comment> \<open>This is all the messages that the attacker can synthesize if it has the set of messages @{term msgs}\<close>
-  "m \<in> parts msgs \<Longrightarrow> m \<in> synth msgs"
-| "Val v \<in> synth msgs" \<comment> \<open>Values can be guessed\<close>
-| "\<lbrakk>m1 \<in> parts msgs; m2 \<in> parts msgs\<rbrakk> \<Longrightarrow> MPair m1 m2 \<in> synth msgs"
-| "\<forall> m \<in> fset s . m \<in> parts msgs \<Longrightarrow> MSet s \<in> synth msgs"
+inductive_set synth :: "'a msg set \<Rightarrow> nat set \<Rightarrow> 'a msg set" for msgs nonces where
+  \<comment> \<open>This is all the messages that the attacker can synthesize if it has the set of messages @{term msgs},
+    where @{term nonces} is the set of nonces that have already been used\<close>
+  "m \<in> parts msgs \<Longrightarrow> m \<in> synth msgs nonces"
+| "Val v \<in> synth msgs nonces" \<comment> \<open>Values can be guessed\<close>
+| "n \<notin> nonces \<Longrightarrow> Nonce n \<in> synth msgs nonces"
+| "\<lbrakk>m1 \<in> parts msgs; m2 \<in> parts msgs\<rbrakk> \<Longrightarrow> MPair m1 m2 \<in> synth msgs nonces"
+| "\<forall> m \<in> fset s . m \<in> parts msgs \<Longrightarrow> MSet s \<in> synth msgs nonces"
+
+definition synth_vdf  where
+  \<comment> \<open>The messages that the adversary can synthesis if it can compute one VDF output\<close>
+  "synth_vdf msgs nonces \<equiv> let syn = synth msgs nonces in
+    \<Union> m \<in> syn . synth (syn \<union> {VDF m}) nonces"
 
 lemma parts_depth:
   fixes msgs d m
@@ -75,13 +81,14 @@ next
     using depth_MSet_1 by fastforce
 qed
 
+
 text \<open>
 Main lemma: the adversary cannot forge a message that has larger depth than any message it already has.\<close>
 
 lemma synth_depth:
-  fixes msgs d m
+  fixes msgs d m nonces
   assumes "\<And> m . m \<in> msgs \<Longrightarrow> depth m \<le> d"
-    and "m \<in> synth msgs"
+    and "m \<in> synth msgs nonces"
   shows "depth m \<le> d" 
   using assms(2)
 proof (induct m)
@@ -93,17 +100,41 @@ next
   then show ?case
     by simp 
 next
-  case (3 m1 m2)
+  case (3 n)
+  then show ?case
+    by auto 
+next
+  case (4 m1 m2)
   then show ?case
     using assms(1) parts_depth by auto
 next
-  case (4 s)
+  case (5 s)
   then show ?case
     by (metis assms(1) depth.simps(4) depth_MSet_2 less_nat_zero_code linorder_not_le parts_depth)
 qed
 
+lemma synth_vdf_depth:
+  fixes msgs :: "'a msg set" and m :: "'a msg" and d :: nat and nonces
+  assumes "\<And> m . m \<in> msgs \<Longrightarrow> depth m \<le> d"
+    and "m \<in> synth_vdf msgs nonces"
+  shows "depth m \<le> d+1"
+proof -
+  have "depth m \<le> d+1" if "m \<in> synth (synth msgs nonces \<union> {VDF m'}) nonces" and "m' \<in> synth msgs nonces" for m m'
+  proof -
+    have "depth m' \<le> d"
+      using assms(1) synth_depth that(2) by blast
+    hence "depth m'' \<le> d+1" if "m'' \<in> synth msgs nonces \<union> {VDF m'}" for m''
+      by (metis Suc_eq_plus1 Un_iff assms(1) depth.simps(3) not_less_eq_eq singleton_iff synth_depth that trans_le_add1)
+    thus ?thesis
+      by (meson synth_depth that(1)) 
+  qed
+  thus ?thesis using assms(2)
+    unfolding synth_vdf_def
+    by (auto simp add:Let_def)
+qed
+
 section "The model"
-   
+
 statespace ('a, 'p, 'o) model_state =
   \<comment> \<open>@{typ 'p} is the type of player IDs\<close>
   round :: "nat" \<comment> \<open>The current round\<close>
@@ -112,15 +143,15 @@ statespace ('a, 'p, 'o) model_state =
   vdf_processors :: "'p \<Rightarrow> nat" \<comment> \<open>How many parallel VDF processors a each participant has in the current round\<close>
   msgs :: "'p \<Rightarrow> 'a msg fset" \<comment> \<open>The mailbox of each player\<close>
   outputs :: "'p \<Rightarrow> 'o"
-
-print_locale model_state
-
-text "TODO: what about the VDFs in messages sent?"
+  adv_knowledge :: "'a msg set" \<comment> \<open>The information that the adversary collected\<close>
+  prev_rnd_msgs :: "'p \<Rightarrow> 'a msg fset" \<comment> \<open>A history variable tracking the messages sent in the previous round\<close>
+  nonces :: "nat set" \<comment> \<open>set of used nonces\<close>
 
 locale model =  model_state
-  where project_'a_VDFConsensus_msg_FSet_fset_'p_fun="project_'a_VDFConsensus_msg_FSet_fset_'p_fun::_ \<Rightarrow> _ \<Rightarrow> 'a msg fset"
-    and inject_'o_'p_fun="inject_'o_'p_fun::('p \<Rightarrow> 'o) \<Rightarrow> _" for project_'a_VDFConsensus_msg_FSet_fset_'p_fun inject_'o_'p_fun +
-    \<comment> \<open>TODO: is there a better way to capture type variables?\<close>
+  \<comment> \<open>Hack to fix type variable names; is there a better way? Note that a state has type @{typ "'name => 'value"}\<close>
+  where project_'a_VDFConsensus_msg_FSet_fset_'p_fun="project_'a_VDFConsensus_msg_FSet_fset_'p_fun::'value \<Rightarrow> 'p \<Rightarrow> 'a msg fset"
+    and inject_'o_'p_fun="inject_'o_'p_fun::('p \<Rightarrow> 'o) \<Rightarrow> _"
+    and round="round::'name" for project_'a_VDFConsensus_msg_FSet_fset_'p_fun inject_'o_'p_fun round +
   fixes send_fn :: "nat \<Rightarrow> 'a msg fset \<Rightarrow> 'a msg" \<comment> \<open>Determines what message a well-behaved player sends each round, as a function of the messages it receives\<close>
     and out :: "nat \<Rightarrow> 'a msg fset \<Rightarrow> 'o" \<comment> \<open>Determines an output each round\<close>
 begin
@@ -134,19 +165,42 @@ definition vdf_assumptions where
     \<and> fsum (s\<cdot>vdf_processors) (s\<cdot>wb) > 0
       \<comment> \<open>Well-behaved players can compute at least 1 VDF output\<close>"
 
-definition init where
-  "init s \<equiv> s\<cdot>round = 1 \<and> s\<cdot>msgs = (\<lambda> p . {||}) \<and> vdf_assumptions s"
+definition wb_send_msg where
+  "wb_send_msg p s \<equiv> let valid_msgs = ffilter (\<lambda> m . depth m = (s\<cdot>round)-1) ((s\<cdot>msgs) p) in
+    if valid_msgs = {||}
+    then s \<comment> \<open>This should not happen\<close>
+    else let n = SOME nonce . nonce \<notin> (s\<cdot>nonces); m = VDF (MPair (Nonce n) (MSet valid_msgs)) in
+      \<comment> \<open>We just pack all the valid messages received along with a fresh nonce in a VDF\<close>
+      s<nonces := (s\<cdot>nonces) \<union> {n}, msgs := \<lambda> p . (s\<cdot>msgs) p |\<union>| {|m|}>"
 
-definition wb_msgs where
-  "wb_msgs s \<equiv> let snd = (\<lambda> msgs . send_fn (s\<cdot>round) msgs) o (s\<cdot>msgs) in
-    (fimage snd (s\<cdot>wb))"
+definition wb_send_msgs where
+  "wb_send_msgs s \<equiv> ffold (\<lambda> p s . wb_send_msg p s) s (s\<cdot>wb)"
+
+lemma test:
+  fixes p
+  shows "fcard (((s'\<cdot>msgs) p) - ((s\<cdot>msgs) p)) = fcard (s\<cdot>wb)"
+  oops
+
+definition adv_msgs where
+  \<comment> \<open>This is the possible set of messages that the adversary can send each round\<close>
+  "adv_msgs s \<equiv> {msgs . \<exists> vdf_msgs . 
+    vdf_msgs \<subseteq> synth_vdf (s\<cdot>adv_knowledge) (s\<cdot>nonces)
+    \<and> card vdf_msgs \<le> fsum (s\<cdot>vdf_processors) (s\<cdot>adv)
+    \<and> msgs = synth (s\<cdot>adv_knowledge) (s\<cdot>nonces) \<union> vdf_msgs}"
+
+definition init where
+  "init s \<equiv> s\<cdot>round = 1 \<and> s\<cdot>msgs = (\<lambda> p . {||}) \<and> vdf_assumptions s \<and> (s\<cdot>adv_knowledge) = {}
+    \<and> (s\<cdot>nonces) = {}"
 
 definition next_round where
   "next_round s s' \<equiv>
     s'\<cdot>round = (s\<cdot>round) + 1
     \<and> vdf_assumptions s'
-    \<and> s'\<cdot>msgs = (\<lambda> p . wb_msgs s) \<comment> \<open>TODO: adversarial messages\<close>
-    \<and> s'\<cdot>outputs = (\<lambda> p . out (s\<cdot>round) ((s\<cdot>msgs) p))"
+    \<and> (\<exists> ms . (\<forall> p . fset (ms p) \<subseteq> synth_vdf (s\<cdot>adv_knowledge))
+        \<and> s'\<cdot>msgs = (\<lambda> p . wb_msgs s |\<union>| ms p))
+    \<and> s'\<cdot>outputs = (\<lambda> p . out (s\<cdot>round) ((s\<cdot>msgs) p))
+    \<and> s'\<cdot>adv_knowledge = (s\<cdot>adv_knowledge) \<union> (\<Union> p . fset ((s'\<cdot>msgs) p))
+    \<and> s'\<cdot>prev_rnd_msgs = s\<cdot>msgs"
 
 end
 
@@ -160,10 +214,10 @@ We'll want to prove that, in a round r, no message has depth more than r, and th
    
 statespace ('a, 'p) vars =
   round :: "nat"
-  adv :: "'p fset" \<comment> \<open>The players controlled by the adversary in the current round\<close>
-  wb :: "'p fset" \<comment> \<open>The well-behaved players in the current round\<close>
+  adv :: "'p set" \<comment> \<open>The players controlled by the adversary in the current round\<close>
+  wb :: "'p set" \<comment> \<open>The well-behaved players in the current round\<close>
   vdf_processors :: "'p \<Rightarrow> nat" \<comment> \<open>How many parallel VDF processors a each participant has in the current round\<close>
-  msgs :: "'p \<Rightarrow> ('a msg) fset" \<comment> \<open>The mailbox of each participant\<close>
+  msgs :: "'p \<Rightarrow> ('a msg) set" \<comment> \<open>The mailbox of each participant\<close>
   round_done :: "'p \<Rightarrow> bool" \<comment> \<open>Whether a process has taken a step this round\<close>
 
 context vars
