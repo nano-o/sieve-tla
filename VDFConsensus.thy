@@ -53,7 +53,7 @@ inductive_set synth :: "'a msg set \<Rightarrow> nat set \<Rightarrow> 'a msg se
 | "\<lbrakk>m1 \<in> parts msgs; m2 \<in> parts msgs\<rbrakk> \<Longrightarrow> MPair m1 m2 \<in> synth msgs nonces"
 | "\<forall> m \<in> fset s . m \<in> parts msgs \<Longrightarrow> MSet s \<in> synth msgs nonces"
 
-definition synth_vdf  where
+definition synth_vdf where
   \<comment> \<open>The messages that the adversary can synthesis if it can compute one VDF output\<close>
   "synth_vdf msgs nonces \<equiv> let syn = synth msgs nonces in
     \<Union> m \<in> syn . synth (syn \<union> {VDF m}) nonces"
@@ -141,11 +141,11 @@ statespace ('a, 'p, 'o) model_state =
   adv :: "'p fset" \<comment> \<open>The players controlled by the adversary in the current round\<close>
   wb :: "'p fset" \<comment> \<open>The well-behaved players in the current round\<close>
   vdf_processors :: "'p \<Rightarrow> nat" \<comment> \<open>How many parallel VDF processors a each participant has in the current round\<close>
-  msgs :: "'p \<Rightarrow> 'a msg fset" \<comment> \<open>The mailbox of each player\<close>
+  msgs :: "'p \<Rightarrow> 'p \<Rightarrow> 'a msg fset" \<comment> \<open>The mailbox of each player\<close>
   outputs :: "'p \<Rightarrow> 'o"
-  adv_knowledge :: "'a msg set" \<comment> \<open>The information that the adversary collected\<close>
-  prev_rnd_msgs :: "'p \<Rightarrow> 'a msg fset" \<comment> \<open>A history variable tracking the messages sent in the previous round\<close>
-  nonces :: "nat set" \<comment> \<open>set of used nonces\<close>
+  adv_knowledge :: "'a msg set" \<comment> \<open>The information that the adversary collected, i.e. all messages ever sent\<close>
+  prev_msgs :: "'p \<Rightarrow> 'p \<Rightarrow> 'a msg fset" \<comment> \<open>A history variable tracking the messages sent in the previous round\<close>
+  nonces :: "nat set" \<comment> \<open>set of nonces used\<close>
 
 locale model =  model_state
   \<comment> \<open>Hack to fix type variable names; is there a better way? Note that a state has type @{typ "'name => 'value"}\<close>
@@ -165,12 +165,9 @@ definition vdf_assumptions where
     \<and> fsum (s\<cdot>vdf_processors) (s\<cdot>wb) > 0
       \<comment> \<open>Well-behaved players can compute at least 1 VDF output\<close>"
 
-definition wb_send_msg where
-  "wb_send_msg p s \<equiv> let valid_msgs = ffilter (\<lambda> m . depth m = (s\<cdot>round)-1) ((s\<cdot>msgs) p) in
-    if valid_msgs = {||}
-    then s \<comment> \<open>This should not happen\<close>
-    else let n = SOME nonce . nonce \<notin> (s\<cdot>nonces); m = VDF (MPair (Nonce n) (MSet valid_msgs)) in
-      \<comment> \<open>We just pack all the valid messages received along with a fresh nonce in a VDF\<close>
+definition wb_msg where
+  "wb_msg s p \<equiv> let n = SOME nonce . nonce \<notin> (s\<cdot>nonces); m = VDF (MPair (Nonce n) (MSet ((s\<cdot>msgs) p))) in
+      \<comment> \<open>We just pack all the messages received along with a fresh nonce in a VDF\<close>
       s<nonces := (s\<cdot>nonces) \<union> {n}, msgs := \<lambda> p . (s\<cdot>msgs) p |\<union>| {|m|}>"
 
 definition wb_send_msgs where
