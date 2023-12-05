@@ -1,5 +1,5 @@
 theory VDFConsensus
-  imports Main "HOL-Library.FSet" "HOL-Statespace.StateSpaceSyntax" "HOL-Library.State_Monad"
+  imports Main "HOL-Library.FSet" "HOL-Statespace.StateSpaceSyntax"
 begin
 
 section "Messages"

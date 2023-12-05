@@ -1,5 +1,5 @@
 session "vdf-consensus" = HOL +
-  options [document = pdf, document_output = "output"]
+  options [document = pdf, document_output = "output", browser_info=true]
   sessions
     "HOL-Library"
     "HOL-Statespace"
