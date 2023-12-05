@@ -141,7 +141,7 @@ statespace ('a, 'p, 'o) model_state =
   adv :: "'p fset" \<comment> \<open>The players controlled by the adversary in the current round\<close>
   wb :: "'p fset" \<comment> \<open>The well-behaved players in the current round\<close>
   vdf_processors :: "'p \<Rightarrow> nat" \<comment> \<open>How many parallel VDF processors a each participant has in the current round\<close>
-  msgs :: "'p \<Rightarrow> 'p \<Rightarrow> 'a msg fset" \<comment> \<open>The mailbox of each player\<close>
+  msgs :: "'p \<Rightarrow> 'a msg fset" \<comment> \<open>The mailbox of each player. TODO: probably need the sender.\<close>
   outputs :: "'p \<Rightarrow> 'o"
   adv_knowledge :: "'a msg set" \<comment> \<open>The information that the adversary collected, i.e. all messages ever sent\<close>
   prev_msgs :: "'p \<Rightarrow> 'p \<Rightarrow> 'a msg fset" \<comment> \<open>A history variable tracking the messages sent in the previous round\<close>
@@ -170,13 +170,11 @@ definition wb_msg where
       \<comment> \<open>We just pack all the messages received along with a fresh nonce in a VDF\<close>
       s<nonces := (s\<cdot>nonces) \<union> {n}, msgs := \<lambda> p . (s\<cdot>msgs) p |\<union>| {|m|}>"
 
-definition wb_send_msgs where
-  "wb_send_msgs s \<equiv> ffold (\<lambda> p s . wb_send_msg p s) s (s\<cdot>wb)"
+text \<open>TODO: fix starting from here\<close>
 
-lemma test:
-  fixes p
-  shows "fcard (((s'\<cdot>msgs) p) - ((s\<cdot>msgs) p)) = fcard (s\<cdot>wb)"
-  oops
+(*
+definition wb_send_msgs where
+  "wb_send_msgs s \<equiv> ffold (\<lambda> p s . wb_send_msg p s) s (s\<cdot>wb)" *)
 
 definition adv_msgs where
   \<comment> \<open>This is the possible set of messages that the adversary can send each round\<close>
@@ -193,14 +191,14 @@ definition next_round where
   "next_round s s' \<equiv>
     s'\<cdot>round = (s\<cdot>round) + 1
     \<and> vdf_assumptions s'
-    \<and> (\<exists> ms . (\<forall> p . fset (ms p) \<subseteq> synth_vdf (s\<cdot>adv_knowledge))
-        \<and> s'\<cdot>msgs = (\<lambda> p . wb_msgs s |\<union>| ms p))
+    \<and> (\<exists> ms . (\<forall> p . fset (ms p) \<subseteq> synth_vdf (s\<cdot>adv_knowledge) {})
+        \<and> s'\<cdot>msgs = (\<lambda> p . (s\<cdot>msgs) p |\<union>| ms p))
     \<and> s'\<cdot>outputs = (\<lambda> p . out (s\<cdot>round) ((s\<cdot>msgs) p))
-    \<and> s'\<cdot>adv_knowledge = (s\<cdot>adv_knowledge) \<union> (\<Union> p . fset ((s'\<cdot>msgs) p))
-    \<and> s'\<cdot>prev_rnd_msgs = s\<cdot>msgs"
+    \<and> s'\<cdot>adv_knowledge = (s\<cdot>adv_knowledge) \<union> (\<Union> p . fset ((s'\<cdot>msgs) p))"
 
 end
 
+(*
 section "The Russian-doll protocol"
 
 text \<open>Now we define a transition system modeling a distributed algorithm\<close>
@@ -245,6 +243,6 @@ lemma round_ge_1:
   "inductive_invariant (\<lambda> s . (s\<cdot>round) \<ge> 1)" by auto
 
                                         
-end
+end *)
 
 end
