@@ -1,6 +1,6 @@
 ----------------- MODULE TLCVDFConsensus -----------------
 
-EXTENDS Integers, FiniteSets
+EXTENDS Integers, FiniteSets, TLC
 
 CONSTANTS
     p1, p2, p3
@@ -40,9 +40,9 @@ ASSUME Intersection({{1,2},{3,4}}) = {}
 m1 == [id |-> 1, round |-> 0, coffer|-> {}] \* well-behaved message
 m2 == [id |-> 2, round |-> 0, coffer|-> {}] \* well-behaved message
 m3 == [id |-> 3, round |-> 0, coffer|-> {}] \* malicious message
-m4 == [id |-> 4, round |-> 1, coffer|-> {m1,m2}] \* well-behaved message
-m5 == [id |-> 5, round |-> 1, coffer|-> {m1,m2,m3}] \* well-behaved message
-m6 == [id |-> 6, round |-> 1, coffer|-> {m1,m3}] \* malicious message
+m4 == [id |-> 4, round |-> 1, coffer|-> {1,2}] \* well-behaved message
+m5 == [id |-> 5, round |-> 1, coffer|-> {1,2,3}] \* well-behaved message
+m6 == [id |-> 6, round |-> 1, coffer|-> {1,3}] \* malicious message
 
 ASSUME \neg ConsistentSet({m1,m2,m3})
 ASSUME ConsistentSet({m4,m5})

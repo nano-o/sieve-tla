@@ -1,6 +1,6 @@
 ------------ MODULE VDFConsensus ----------------
 
-EXTENDS FiniteSets, Integers
+EXTENDS FiniteSets, Integers, TLC
 
 CONSTANTS
     P \* the set of processes
@@ -36,11 +36,10 @@ Intersection(Ss) ==
             LET S == (CHOOSE S \in Ss : TRUE)
             IN  S \cap Intersection(Ss \ {S})
 
-(*********************************************************************************)
-(* A set of messages is consistent when the intersection of the sets of          *)
-(* predecessors of each message is a strict majority of the predecessors of each *)
-(* message.                                                                      *)
-(*********************************************************************************)
+(********************************************************************************)
+(* A set of messages is consistent when the intersection of the coffers of each *)
+(* message is a strict majority of the coffer of each message.                  *)
+(********************************************************************************)
 ConsistentSet(M) ==
     LET I == Intersection({m.coffer : m \in M})
     IN \A m \in M : 2*Cardinality(I) > Cardinality(m.coffer)
@@ -71,7 +70,7 @@ ConsistentChain(M) ==
         \/  LET Tip == { m \in M : m.round = r }
                 Pred == { m \in M : m.round = r-1 }
             IN  /\  \A m \in Tip : 
-                    /\  Pred \subseteq m.coffer
+                    /\ \A m2 \in Pred : m2.id \in m.coffer
                     /\  2*Cardinality(Pred) > Cardinality(m.coffer)
                 /\  ConsistentChain(M \ Tip)
 
@@ -79,7 +78,7 @@ ConsistentChain(M) ==
 (* Given a message DAG, the heaviest consistent chain is a consistent chain in the *)
 (* DAG that has a maximal number of messages.                                      *)
 (***********************************************************************************)
-HeaviestConsistentChain(M) == 
+HeaviestConsistentChain(M) ==
     LET r == Max({m.round : m \in M}, <=)
         Cs == {C \in SUBSET M : ConsistentChain(C)}
     IN  
@@ -122,7 +121,8 @@ l1:     while (TRUE) {
             if (tick % tWB = 0) {
                 \* Start the VDF computation for the next message:
                 with (msgs \in receivedMsgsSets)
-                with (predMsgs = {m \in msgs : m.round = currentRound(tWB)-1}) {
+                with (hCC = HeaviestConsistentChain(msgs))
+                with (predMsgs = {m \in hCC : m.round = currentRound(tWB)-1}) {
                     \* TODO: filter messages
                     pendingMessage[self] := [
                         sender |-> self,
@@ -144,6 +144,7 @@ l1:     while (TRUE) {
     {
 lb1:    while (TRUE) {
             await tick > doneTick[self];
+            await \A p \in P \ B : doneTick[p] = tick; \* otherwise well-behaved processes may receive Byzantine messages from this tick in this tick
             if (tick % tAdv = 0) {
                 \* Start the VDF computation for the next message:
                 with (msgs \in receivedMsgsSets)
@@ -166,6 +167,83 @@ lb1:    while (TRUE) {
     }
 }
 *)
+\* BEGIN TRANSLATION (chksum(pcal) = "6359dab8" /\ chksum(tla) = "a23f447a")
+\* Label tick of process clock at line 111 col 9 changed to tick_
+VARIABLES messages, tick, pendingMessage, doneTick, messageCount
+
+(* define statement *)
+currentRound(t) == tick \div t
+wellBehavedMessages == {m \in messages : m.sender \in P \ B}
+
+receivedMsgsSets == LET msgs == {m \in messages : m.round < tick} IN
+    {wellBehavedMessages \cup byzMsgs :
+        byzMsgs \in SUBSET (msgs \ wellBehavedMessages)}
+
+
+vars == << messages, tick, pendingMessage, doneTick, messageCount >>
+
+ProcSet == ({"clock"}) \cup (P \ B) \cup (B)
+
+Init == (* Global variables *)
+        /\ messages = {}
+        /\ tick = 0
+        /\ pendingMessage = [p \in P |-> <<>>]
+        /\ doneTick = [p \in P |-> -1]
+        /\ messageCount = 0
+
+clock(self) == /\ \A p \in P : doneTick[p] = tick
+               /\ tick' = tick+1
+               /\ UNCHANGED << messages, pendingMessage, doneTick, 
+                               messageCount >>
+
+proc(self) == /\ tick > doneTick[self]
+              /\ IF tick % tWB = 0
+                    THEN /\ \E msgs \in receivedMsgsSets:
+                              LET hCC == HeaviestConsistentChain(msgs) IN
+                                LET predMsgs == {m \in hCC : m.round = currentRound(tWB)-1} IN
+                                  /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
+                                                                                        sender |-> self,
+                                                                                        id |-> messageCount+1,
+                                                                                        round |-> currentRound(tWB),
+                                                                                        coffer |-> {m.id : m \in predMsgs}]]
+                                  /\ messageCount' = messageCount+1
+                         /\ UNCHANGED messages
+                    ELSE /\ IF tick % tWB = tWB -1
+                               THEN /\ messages' = (messages \cup {(pendingMessage[self])})
+                               ELSE /\ TRUE
+                                    /\ UNCHANGED messages
+                         /\ UNCHANGED << pendingMessage, messageCount >>
+              /\ doneTick' = [doneTick EXCEPT ![self] = tick]
+              /\ tick' = tick
+
+byz(self) == /\ tick > doneTick[self]
+             /\ \A p \in P \ B : doneTick[p] = tick
+             /\ IF tick % tAdv = 0
+                   THEN /\ \E msgs \in receivedMsgsSets:
+                             \E rnd \in 0..currentRound(tAdv):
+                               LET predMsgs == {m \in msgs : m.round = rnd-1} IN
+                                 /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
+                                                                                       sender |-> self,
+                                                                                       id |-> messageCount+1,
+                                                                                       round |-> rnd,
+                                                                                       coffer |-> {m.id : m \in predMsgs}]]
+                                 /\ messageCount' = messageCount+1
+                        /\ UNCHANGED messages
+                   ELSE /\ IF tick % tAdv = tAdv -1
+                              THEN /\ messages' = (messages \cup {(pendingMessage[self])})
+                              ELSE /\ TRUE
+                                   /\ UNCHANGED messages
+                        /\ UNCHANGED << pendingMessage, messageCount >>
+             /\ doneTick' = [doneTick EXCEPT ![self] = tick]
+             /\ tick' = tick
+
+Next == (\E self \in {"clock"}: clock(self))
+           \/ (\E self \in P \ B: proc(self))
+           \/ (\E self \in B: byz(self))
+
+Spec == Init /\ [][Next]_vars
+
+\* END TRANSLATION 
 
 TypeOK == 
     /\  messages \in SUBSET Message
@@ -175,6 +253,18 @@ TypeOK ==
 
 messageWithID(id) == CHOOSE m \in messages : m.id = id
 
+(**********************************************************************************)
+(* The main property we want to establish is that, each round, for each message m *)
+(* of a well-behaved process, the messages of well-behaved processes from the     *)
+(* previous round are all in m's coffer and consist of a strict majority of m's   *)
+(* coffer.                                                                        *)
+(**********************************************************************************)
+Safety == \A m \in messages : m.round > 0 /\ m.sender \notin B =>
+    /\  \A m2 \in wellBehavedMessages : m2.round = m.round-1 => m2.id \in m.coffer
+    /\  LET M == {m2 \in wellBehavedMessages : m2.round = m.round-1}
+        IN  2*Cardinality(M) > Cardinality(m.coffer)
+
+\* A basic well-formedness property:    
 Inv1 == \A m \in messages : \A id \in m.coffer :
     /\  \E m2 \in messages : m2.id = id
     /\  messageWithID(id).round = m.round-1
