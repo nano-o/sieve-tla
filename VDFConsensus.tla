@@ -1,6 +1,6 @@
 ------------ MODULE VDFConsensus ----------------
 
-EXTENDS FiniteSets, Naturals
+EXTENDS FiniteSets, Integers
 
 CONSTANTS
     P \* the set of processes
@@ -23,8 +23,8 @@ Round == Nat \* a round is just a tag on a message
 ASSUME Cardinality(W)*tAdv > Cardinality(B)*tWB
 
 MessageID == Nat
-\* A message consists of a unique ID, a round number, and a pointer to a set of previous messages:
-Message == [id : MessageID, round : Round, pred : SUBSET MessageID]
+\* A message consists of a unique ID, a round number, and a coffer containing the IDs of a set of predecessor messages:
+Message == [sender : P, id : MessageID, round : Round, coffer : SUBSET MessageID]
 
 \* We will need the intersection of a set of sets:
 RECURSIVE Intersection(_)
@@ -42,8 +42,8 @@ Intersection(Ss) ==
 (* message.                                                                      *)
 (*********************************************************************************)
 ConsistentSet(M) ==
-    LET I == Intersection({m.pred : m \in M})
-    IN \A m \in M : 2*Cardinality(I) > Cardinality(m.pred)
+    LET I == Intersection({m.coffer : m \in M})
+    IN \A m \in M : 2*Cardinality(I) > Cardinality(m.coffer)
 
 (***********************************************************************************)
 (* A consistent chain is a subset of the messages in the DAG that potentially has  *)
@@ -71,8 +71,8 @@ ConsistentChain(M) ==
         \/  LET Tip == { m \in M : m.round = r }
                 Pred == { m \in M : m.round = r-1 }
             IN  /\  \A m \in Tip : 
-                    /\  Pred \subseteq m.pred
-                    /\  2*Cardinality(Pred) > Cardinality(m.pred)
+                    /\  Pred \subseteq m.coffer
+                    /\  2*Cardinality(Pred) > Cardinality(m.coffer)
                 /\  ConsistentChain(M \ Tip)
 
 (***********************************************************************************)
@@ -86,4 +86,97 @@ HeaviestConsistentChain(M) ==
         IF Cs = {} THEN {}
         ELSE Max(Cs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 
+(********************************)
+(* Now we specify the algorithm *)
+(********************************)
+
+(*--algorithm Algo {
+    variables
+        messages = {};
+        tick = 0;
+        pendingMessage = [p \in P |-> <<>>];
+        doneTick = [p \in P |-> -1];
+        messageCount = 0; \* used to generate unique message IDs
+    define {
+        currentRound(t) == tick \div t
+        wellBehavedMessages == {m \in messages : m.sender \in P \ B}
+        \* possible sets of messages received by a well-behaved process:
+        receivedMsgsSets == LET msgs == {m \in messages : m.round < tick} IN
+            {wellBehavedMessages \cup byzMsgs :
+                byzMsgs \in SUBSET (msgs \ wellBehavedMessages)}
+    }
+    macro sendMessage(m) {
+        messages := messages \cup {m}
+    }
+    process (clock \in {"clock"}) {
+tick:   while (TRUE) {
+            \* wait for all processes to take their step before incrementing the tick
+            await \A p \in P : doneTick[p] = tick;
+            tick := tick+1;
+        }
+    }
+    process (proc \in P \ B) \* a well-behaved process
+    {
+l1:     while (TRUE) {
+            await tick > doneTick[self];
+            if (tick % tWB = 0) {
+                \* Start the VDF computation for the next message:
+                with (msgs \in receivedMsgsSets)
+                with (predMsgs = {m \in msgs : m.round = currentRound(tWB)-1}) {
+                    \* TODO: filter messages
+                    pendingMessage[self] := [
+                        sender |-> self,
+                        id |-> messageCount+1,
+                        round |-> currentRound(tWB),
+                        coffer |-> {m.id : m \in predMsgs}];
+                    messageCount := messageCount+1;
+                }
+            }
+            else
+            if (tick % tWB = tWB -1) 
+                \* it's tWB-1 because we want the message to be received by tick tWB
+                sendMessage(pendingMessage[self]);
+            else skip; \* busy computing the VDF
+            doneTick[self] := tick;
+        }
+    }
+    process (byz \in B) \* a malicious process
+    {
+lb1:    while (TRUE) {
+            await tick > doneTick[self];
+            if (tick % tAdv = 0) {
+                \* Start the VDF computation for the next message:
+                with (msgs \in receivedMsgsSets)
+                with (rnd \in 0..currentRound(tAdv)) \* can forge messages from any previous round
+                with (predMsgs = {m \in msgs : m.round = rnd-1}) {
+                    pendingMessage[self] := [
+                        sender |-> self,
+                        id |-> messageCount+1,
+                        round |-> rnd,
+                        coffer |-> {m.id : m \in predMsgs}];
+                    messageCount := messageCount+1;
+                }
+            }
+            else
+            if (tick % tAdv = tAdv -1)
+                sendMessage(pendingMessage[self]);
+            else skip; \* busy computing the VDF
+            doneTick[self] := tick;
+        };
+    }
+}
+*)
+
+TypeOK == 
+    /\  messages \in SUBSET Message
+    /\  pendingMessage \in [P -> Message \cup {<<>>}]
+    /\  tick \in Tick
+    /\  doneTick \in [P -> Tick \cup {-1}]
+
+messageWithID(id) == CHOOSE m \in messages : m.id = id
+
+Inv1 == \A m \in messages : \A id \in m.coffer :
+    /\  \E m2 \in messages : m2.id = id
+    /\  messageWithID(id).round = m.round-1
+    
 =================================================
