@@ -1,0 +1,39 @@
+## Blacklist all files
+*
+
+## now whitelist stuff
+
+!*.md
+
+!.gitignore
+
+!*.sh
+
+!*.tla
+
+## Whitelist TLC model config and results
+!*.cfg
+!*.out
+
+## Whitelist Toolbox model metadata
+!*.launch
+
+## Whitelist Toolbox spec metadata
+!.project
+!*.prefs
+
+## Whitelist all folders
+#!*/
+
+## quint spec
+!*.qnt
+
+## Blacklist TLAPS cache folder
+## See https://github.com/tlaplus/tlapm/issues/16
+__tlacache__
+.tlacache
+
+## Blacklist Snapshots
+*/*SnapShot*
+
+#_apalache-out
