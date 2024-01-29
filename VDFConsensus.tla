@@ -69,7 +69,8 @@ ConsistentChain(M) ==
         \/  r = 0
         \/  LET Tip == { m \in M : m.round = r }
                 Pred == { m \in M : m.round = r-1 }
-            IN  /\  \A m \in Tip : 
+            IN  /\  Tip # {}
+                /\  \A m \in Tip :
                     /\ \A m2 \in Pred : m2.id \in m.coffer
                     /\  2*Cardinality(Pred) > Cardinality(m.coffer)
                 /\  ConsistentChain(M \ Tip)
@@ -80,7 +81,7 @@ ConsistentChain(M) ==
 (***********************************************************************************)
 HeaviestConsistentChain(M) ==
     LET r == Max({m.round : m \in M}, <=)
-        Cs == {C \in SUBSET M : ConsistentChain(C)}
+        Cs == {C \in SUBSET M : (\E m \in C : m.round = r) /\ ConsistentChain(C)}
     IN  
         IF Cs = {} THEN {}
         ELSE Max(Cs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
@@ -100,7 +101,9 @@ HeaviestConsistentChain(M) ==
         currentRound(t) == tick \div t
         wellBehavedMessages == {m \in messages : m.sender \in P \ B}
         \* possible sets of messages received by a well-behaved process:
-        receivedMsgsSets == LET msgs == {m \in messages : m.round < tick} IN
+        receivedMsgsSets == 
+            \* ignore messages from future rounds:
+            LET msgs == {m \in messages : m.round < currentRound(tWB)} IN
             {wellBehavedMessages \cup byzMsgs :
                 byzMsgs \in SUBSET (msgs \ wellBehavedMessages)}
     }
@@ -167,15 +170,17 @@ lb1:    while (TRUE) {
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "6359dab8" /\ chksum(tla) = "a23f447a")
-\* Label tick of process clock at line 111 col 9 changed to tick_
+\* BEGIN TRANSLATION (chksum(pcal) = "f24bd6ee" /\ chksum(tla) = "e1098f25")
+\* Label tick of process clock at line 114 col 9 changed to tick_
 VARIABLES messages, tick, pendingMessage, doneTick, messageCount
 
 (* define statement *)
 currentRound(t) == tick \div t
 wellBehavedMessages == {m \in messages : m.sender \in P \ B}
 
-receivedMsgsSets == LET msgs == {m \in messages : m.round < tick} IN
+receivedMsgsSets ==
+
+    LET msgs == {m \in messages : m.round < currentRound(tWB)} IN
     {wellBehavedMessages \cup byzMsgs :
         byzMsgs \in SUBSET (msgs \ wellBehavedMessages)}
 
