@@ -94,16 +94,17 @@ HeaviestConsistentChain(M) ==
     variables
         messages = {};
         tick = 0;
+        phase = "start"; \* each tick has two phases: "start" and "end"
+        donePhase = [p \in P |-> "end"];
         pendingMessage = [p \in P |-> <<>>];
-        doneTick = [p \in P |-> -1];
         messageCount = 0; \* used to generate unique message IDs
     define {
-        currentRound(t) == tick \div t
+        currentRound == tick \div tWB \* round of well-behaved processes
         wellBehavedMessages == {m \in messages : m.sender \in P \ B}
         \* possible sets of messages received by a well-behaved process:
         receivedMsgsSets == 
             \* ignore messages from future rounds:
-            LET msgs == {m \in messages : m.round < currentRound(tWB)} IN
+            LET msgs == {m \in messages : m.round < currentRound} IN
             {wellBehavedMessages \cup byzMsgs :
                 byzMsgs \in SUBSET (msgs \ wellBehavedMessages)}
     }
@@ -112,47 +113,50 @@ HeaviestConsistentChain(M) ==
     }
     process (clock \in {"clock"}) {
 tick:   while (TRUE) {
-            \* wait for all processes to take their step before incrementing the tick
-            await \A p \in P : doneTick[p] = tick;
-            tick := tick+1;
+            await \A p \in P : donePhase[p] = phase;
+            if (phase = "start")
+                phase := "end"
+            else {
+                phase := "start";
+                tick := tick+1
+            }
         }
     }
     process (proc \in P \ B) \* a well-behaved process
     {
 l1:     while (TRUE) {
-            await tick > doneTick[self];
+            await phase = "start";
             if (tick % tWB = 0) {
                 \* Start the VDF computation for the next message:
                 with (msgs \in receivedMsgsSets)
                 with (hCC = HeaviestConsistentChain(msgs))
-                with (predMsgs = {m \in hCC : m.round = currentRound(tWB)-1}) {
-                    \* TODO: filter messages
+                with (predMsgs = {m \in hCC : m.round = currentRound-1}) {
                     pendingMessage[self] := [
                         sender |-> self,
                         id |-> messageCount+1,
-                        round |-> currentRound(tWB),
+                        round |-> currentRound,
                         coffer |-> {m.id : m \in predMsgs}];
                     messageCount := messageCount+1;
                 }
-            }
-            else
-            if (tick % tWB = tWB -1) 
-                \* it's tWB-1 because we want the message to be received by tick tWB
+            };
+            donePhase[self] := "start";
+l2:         await phase = "end";
+            if (tick % tWB = tWB - 1)
+                \* it's the end of the tWB period, the VDF has been computed
                 sendMessage(pendingMessage[self]);
-            else skip; \* busy computing the VDF
-            doneTick[self] := tick;
+            donePhase[self] := "end";
         }
     }
     process (byz \in B) \* a malicious process
     {
 lb1:    while (TRUE) {
-            await tick > doneTick[self];
-            await \A p \in P \ B : doneTick[p] = tick; \* otherwise well-behaved processes may receive Byzantine messages from this tick in this tick
+            await phase = "start";
             if (tick % tAdv = 0) {
                 \* Start the VDF computation for the next message:
-                with (msgs \in receivedMsgsSets)
-                with (rnd \in 0..currentRound(tAdv)) \* can forge messages from any previous round
-                with (predMsgs = {m \in msgs : m.round = rnd-1}) {
+                with (maxRound = Max({m.round : m \in messages} \cup {0}, <=))
+                with (rnd \in {maxRound, maxRound+1})
+                with (predMsgs \in SUBSET {m \in messages : m.round = rnd-1}) {
+                    when rnd > 0 => predMsgs # {};
                     pendingMessage[self] := [
                         sender |-> self,
                         id |-> messageCount+1,
@@ -160,101 +164,24 @@ lb1:    while (TRUE) {
                         coffer |-> {m.id : m \in predMsgs}];
                     messageCount := messageCount+1;
                 }
-            }
-            else
-            if (tick % tAdv = tAdv -1)
+            };
+            donePhase[self] := "start";
+lb2:        await phase = "end";
+            if (tick % tAdv = tAdv - 1)
                 sendMessage(pendingMessage[self]);
-            else skip; \* busy computing the VDF
-            doneTick[self] := tick;
+            donePhase[self] := "end";
         };
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "f24bd6ee" /\ chksum(tla) = "e1098f25")
-\* Label tick of process clock at line 114 col 9 changed to tick_
-VARIABLES messages, tick, pendingMessage, doneTick, messageCount
-
-(* define statement *)
-currentRound(t) == tick \div t
-wellBehavedMessages == {m \in messages : m.sender \in P \ B}
-
-receivedMsgsSets ==
-
-    LET msgs == {m \in messages : m.round < currentRound(tWB)} IN
-    {wellBehavedMessages \cup byzMsgs :
-        byzMsgs \in SUBSET (msgs \ wellBehavedMessages)}
-
-
-vars == << messages, tick, pendingMessage, doneTick, messageCount >>
-
-ProcSet == ({"clock"}) \cup (P \ B) \cup (B)
-
-Init == (* Global variables *)
-        /\ messages = {}
-        /\ tick = 0
-        /\ pendingMessage = [p \in P |-> <<>>]
-        /\ doneTick = [p \in P |-> -1]
-        /\ messageCount = 0
-
-clock(self) == /\ \A p \in P : doneTick[p] = tick
-               /\ tick' = tick+1
-               /\ UNCHANGED << messages, pendingMessage, doneTick, 
-                               messageCount >>
-
-proc(self) == /\ tick > doneTick[self]
-              /\ IF tick % tWB = 0
-                    THEN /\ \E msgs \in receivedMsgsSets:
-                              LET hCC == HeaviestConsistentChain(msgs) IN
-                                LET predMsgs == {m \in hCC : m.round = currentRound(tWB)-1} IN
-                                  /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
-                                                                                        sender |-> self,
-                                                                                        id |-> messageCount+1,
-                                                                                        round |-> currentRound(tWB),
-                                                                                        coffer |-> {m.id : m \in predMsgs}]]
-                                  /\ messageCount' = messageCount+1
-                         /\ UNCHANGED messages
-                    ELSE /\ IF tick % tWB = tWB -1
-                               THEN /\ messages' = (messages \cup {(pendingMessage[self])})
-                               ELSE /\ TRUE
-                                    /\ UNCHANGED messages
-                         /\ UNCHANGED << pendingMessage, messageCount >>
-              /\ doneTick' = [doneTick EXCEPT ![self] = tick]
-              /\ tick' = tick
-
-byz(self) == /\ tick > doneTick[self]
-             /\ \A p \in P \ B : doneTick[p] = tick
-             /\ IF tick % tAdv = 0
-                   THEN /\ \E msgs \in receivedMsgsSets:
-                             \E rnd \in 0..currentRound(tAdv):
-                               LET predMsgs == {m \in msgs : m.round = rnd-1} IN
-                                 /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
-                                                                                       sender |-> self,
-                                                                                       id |-> messageCount+1,
-                                                                                       round |-> rnd,
-                                                                                       coffer |-> {m.id : m \in predMsgs}]]
-                                 /\ messageCount' = messageCount+1
-                        /\ UNCHANGED messages
-                   ELSE /\ IF tick % tAdv = tAdv -1
-                              THEN /\ messages' = (messages \cup {(pendingMessage[self])})
-                              ELSE /\ TRUE
-                                   /\ UNCHANGED messages
-                        /\ UNCHANGED << pendingMessage, messageCount >>
-             /\ doneTick' = [doneTick EXCEPT ![self] = tick]
-             /\ tick' = tick
-
-Next == (\E self \in {"clock"}: clock(self))
-           \/ (\E self \in P \ B: proc(self))
-           \/ (\E self \in B: byz(self))
-
-Spec == Init /\ [][Next]_vars
-
-\* END TRANSLATION 
 
 TypeOK == 
     /\  messages \in SUBSET Message
     /\  pendingMessage \in [P -> Message \cup {<<>>}]
     /\  tick \in Tick
-    /\  doneTick \in [P -> Tick \cup {-1}]
+    /\  phase \in {"start", "end"}
+    /\  donePhase \in [P -> {"start", "end"}]
+    /\  messageCount \in Nat
 
 messageWithID(id) == CHOOSE m \in messages : m.id = id
 
