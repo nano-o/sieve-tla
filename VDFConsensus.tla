@@ -63,6 +63,9 @@ ConsistentSet(M) ==
 Max(X, Leq(_,_)) ==
     CHOOSE m \in X : \A x \in X : Leq(x,m)
 
+MaximalElements(X, Leq(_,_)) ==
+    {m \in X : \A x \in X : \neg (Leq(m,x) /\ \neg Leq(x,m))}
+
 (**********************************************************************************)
 (* TODO this might be too restrictive: maybe we should only require that a subset *)
 (* of Pred be a strict majority of the set of predecessors of each message in Tip *)
@@ -93,6 +96,11 @@ HeaviestConsistentChain(M) ==
         IF Cs = {} THEN {}
         ELSE Max(Cs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 
+HeaviestConsistentChains(M) ==
+    LET r == Max({m.round : m \in M}, <=)
+        Cs == {C \in SUBSET M : (\E m \in C : m.round = r) /\ ConsistentChain(C)}
+    IN  MaximalElements(Cs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
+
 (***********************************************************************************)
 (* Two chains are disjoint when there is a round in which they have no messages in *)
 (* common:                                                                         *)
@@ -104,6 +112,11 @@ DisjointChains(C1,C2) ==
             /\  r <= r1
             /\  r <= r2
             /\  {m \in C1 : m.round = r} \cap {m \in C2 : m.round = r} = {}
+
+(**********************************************************************************)
+(* TODO: maximal partition of the hccs so that chains in different partitions are *)
+(* disjoint. Then take largest.                                                   *)
+(**********************************************************************************)
 
 (********************************)
 (* Now we specify the algorithm *)
@@ -148,7 +161,7 @@ l1:     while (TRUE) {
             if (tick % tWB = 0) {
                 \* Start the VDF computation for the next message:
                 with (msgs \in receivedMsgsSets)
-                with (hCC = HeaviestConsistentChain(msgs))
+                with (hCC = UNION HeaviestConsistentChains(msgs))
                 with (predMsgs = {m \in hCC : m.round = currentRound-1}) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
@@ -191,7 +204,6 @@ lb2:        await phase = "end";
     }
 }
 *)
-
 TypeOK == 
     /\  messages \in SUBSET Message
     /\  pendingMessage \in [P -> Message \cup {<<>>}]
@@ -208,7 +220,10 @@ messageWithID(id) == CHOOSE m \in messages : m.id = id
 (* previous round are all in m's coffer and consist of a strict majority of m's   *)
 (* coffer.                                                                        *)
 (**********************************************************************************)
-Safety == \A m \in messages : m.round > 0 /\ sender(m) \notin B =>
+Safety == \A p \in P \ B : LET m == pendingMessage[p] IN
+    /\  m # <<>>
+    /\  m.round > 0
+    =>
     /\  \A m2 \in wellBehavedMessages : m2.round = m.round-1 => m2.id \in m.coffer
     /\  LET M == {m2 \in wellBehavedMessages : m2.round = m.round-1}
         IN  2*Cardinality(M) > Cardinality(m.coffer)
