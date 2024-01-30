@@ -21,6 +21,7 @@ Round == Nat \* a round is just a tag on a message
 (* produce messages at a rate strictly higher than that of malicious processes.    *)
 (***********************************************************************************)
 ASSUME Cardinality(W)*tAdv > Cardinality(B)*tWB
+\* TODO: I think we're going to need Cardinality(W)*tAdv > 2*Cardinality(B)*tWB
 
 MessageID == Nat
 \* A message consists of a unique ID, a round number, and a coffer containing the IDs of a set of predecessor messages:
@@ -61,18 +62,23 @@ ConsistentSet(M) ==
 Max(X, Leq(_,_)) ==
     CHOOSE m \in X : \A x \in X : Leq(x,m)
 
+(**********************************************************************************)
+(* TODO this might be too restrictive: maybe we should only require that a subset *)
+(* of Pred be a strict majority of the set of predecessors of each message in Tip *)
+(**********************************************************************************)
 RECURSIVE ConsistentChain(_)
 ConsistentChain(M) ==
-    IF M = {}
-    THEN FALSE
-    ELSE LET r == Max({m.round : m \in M}, <=) IN
+    /\  M # {}
+    /\  LET r == Max({m.round : m \in M}, <=) IN
         \/  r = 0
         \/  LET Tip == { m \in M : m.round = r }
                 Pred == { m \in M : m.round = r-1 }
             IN  /\  Tip # {}
-                /\  \A m \in Tip :
-                    /\ \A m2 \in Pred : m2.id \in m.coffer
-                    /\  2*Cardinality(Pred) > Cardinality(m.coffer)
+                /\  \E Maj \in SUBSET Pred :
+                    /\  Maj # {}
+                    /\  \A m \in Tip :
+                        /\ \A m2 \in Maj : m2.id \in m.coffer
+                        /\  2*Cardinality(Maj) > Cardinality(m.coffer)
                 /\  ConsistentChain(M \ Tip)
 
 (***********************************************************************************)
@@ -86,10 +92,23 @@ HeaviestConsistentChain(M) ==
         IF Cs = {} THEN {}
         ELSE Max(Cs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 
+(***********************************************************************************)
+(* Two chains are disjoint when there is a round in which they have no messages in *)
+(* common:                                                                         *)
+(***********************************************************************************)
+DisjointChains(C1,C2) ==
+    LET r1 == Max({m.round : m \in C1}, <=)
+        r2 == Max({m.round : m \in C2}, <=)
+    IN  \E r \in Round :
+            /\  r <= r1
+            /\  r <= r2
+            /\  {m \in C1 : m.round = r} \cap {m \in C2 : m.round = r} = {}
+
 (********************************)
 (* Now we specify the algorithm *)
 (********************************)
 
+\* TODO: let me be a function from ID to message; will help reading counter-examples
 (*--algorithm Algo {
     variables
         messages = {};
