@@ -23,9 +23,10 @@ Round == Nat \* a round is just a tag on a message
 ASSUME Cardinality(W)*tAdv > Cardinality(B)*tWB
 \* TODO: I think we're going to need Cardinality(W)*tAdv > 2*Cardinality(B)*tWB
 
-MessageID == Nat
 \* A message consists of a unique ID, a round number, and a coffer containing the IDs of a set of predecessor messages:
-Message == [sender : P, id : MessageID, round : Round, coffer : SUBSET MessageID]
+MessageID == P\times Nat
+Message == [id : MessageID, round : Round, coffer : SUBSET MessageID]
+sender(m) == m.id[1]
 
 \* We will need the intersection of a set of sets:
 RECURSIVE Intersection(_)
@@ -108,7 +109,6 @@ DisjointChains(C1,C2) ==
 (* Now we specify the algorithm *)
 (********************************)
 
-\* TODO: let me be a function from ID to message; will help reading counter-examples
 (*--algorithm Algo {
     variables
         messages = {};
@@ -116,10 +116,10 @@ DisjointChains(C1,C2) ==
         phase = "start"; \* each tick has two phases: "start" and "end"
         donePhase = [p \in P |-> "end"];
         pendingMessage = [p \in P |-> <<>>];
-        messageCount = 0; \* used to generate unique message IDs
+        messageCount = [p \in P |-> 0];
     define {
         currentRound == tick \div tWB \* round of well-behaved processes
-        wellBehavedMessages == {m \in messages : m.sender \in P \ B}
+        wellBehavedMessages == {m \in messages : sender(m) \in P \ B}
         \* possible sets of messages received by a well-behaved process:
         receivedMsgsSets == 
             \* ignore messages from future rounds:
@@ -151,11 +151,10 @@ l1:     while (TRUE) {
                 with (hCC = HeaviestConsistentChain(msgs))
                 with (predMsgs = {m \in hCC : m.round = currentRound-1}) {
                     pendingMessage[self] := [
-                        sender |-> self,
-                        id |-> messageCount+1,
+                        id |-> <<self,messageCount[self]+1>>,
                         round |-> currentRound,
                         coffer |-> {m.id : m \in predMsgs}];
-                    messageCount := messageCount+1;
+                    messageCount[self] := messageCount[self]+1
                 }
             };
             donePhase[self] := "start";
@@ -177,11 +176,10 @@ lb1:    while (TRUE) {
                 with (predMsgs \in SUBSET {m \in messages : m.round = rnd-1}) {
                     when rnd > 0 => predMsgs # {};
                     pendingMessage[self] := [
-                        sender |-> self,
-                        id |-> messageCount+1,
+                        id |-> <<self,messageCount[self]+1>>,
                         round |-> rnd,
                         coffer |-> {m.id : m \in predMsgs}];
-                    messageCount := messageCount+1;
+                    messageCount[self] := messageCount[self]+1
                 }
             };
             donePhase[self] := "start";
@@ -200,7 +198,7 @@ TypeOK ==
     /\  tick \in Tick
     /\  phase \in {"start", "end"}
     /\  donePhase \in [P -> {"start", "end"}]
-    /\  messageCount \in Nat
+    /\  messageCount \in [P -> Nat]
 
 messageWithID(id) == CHOOSE m \in messages : m.id = id
 
@@ -210,14 +208,16 @@ messageWithID(id) == CHOOSE m \in messages : m.id = id
 (* previous round are all in m's coffer and consist of a strict majority of m's   *)
 (* coffer.                                                                        *)
 (**********************************************************************************)
-Safety == \A m \in messages : m.round > 0 /\ m.sender \notin B =>
+Safety == \A m \in messages : m.round > 0 /\ sender(m) \notin B =>
     /\  \A m2 \in wellBehavedMessages : m2.round = m.round-1 => m2.id \in m.coffer
     /\  LET M == {m2 \in wellBehavedMessages : m2.round = m.round-1}
         IN  2*Cardinality(M) > Cardinality(m.coffer)
 
-\* A basic well-formedness property:    
-Inv1 == \A m \in messages : \A id \in m.coffer :
-    /\  \E m2 \in messages : m2.id = id
-    /\  messageWithID(id).round = m.round-1
+\* Basic well-formedness properties:    
+Inv1 == \A m \in messages : 
+    /\  \A m2 \in messages : m # m2 => m.id # m2.id
+    /\  \A id \in m.coffer :
+        /\  \E m2 \in messages : m2.id = id
+        /\  messageWithID(id).round = m.round-1
     
 =================================================
