@@ -3,12 +3,15 @@
 EXTENDS Integers, FiniteSets, TLC
 
 CONSTANTS
-    p1, p2, p3, p4 \*, p5
+    \* p1, p2, p3
+    p1, p2, p3, p4, p5
 
-P == {p1,p2,p3}
-B == {p1}
-tAdv == 2
-tWB == 3
+MaxTick == 3
+
+P == {p1,p2,p3,p4,p5}
+B == {p4,p5}
+tAdv == 1
+tWB == 1
 
 \* 50 minutes, depth 104, to finish tick 12:
 \* P == {p1,p2,p3}
@@ -22,11 +25,6 @@ tWB == 3
 \* tAdv == 1
 \* tWB == 1
 
-\* We use the following definition to bound the state-space for the model-checker
-MaxTick == 18
-\* MCTick == 0..MaxTick
-\* MaxRound == MaxTick \div tAdv
-\* MCRound == 0..MaxRound
 
 VARIABLES messages, pendingMessage, tick, phase, donePhase, pc, messageCount
 
@@ -45,7 +43,7 @@ AdvConstraint == \A m1,m2 \in messages :
     => m1 = m2
 
 Canary1 == \neg (
-    tick = 12
+    tick = 3
 )
 
 \* Check that the adversary can indeed outpace the round number of well-behaved nodes:

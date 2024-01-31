@@ -1,6 +1,6 @@
 ------------ MODULE VDFConsensus ----------------
 
-EXTENDS FiniteSets, Integers, TLC
+EXTENDS FiniteSets, Integers, Utils
 
 CONSTANTS
     P \* the set of processes
@@ -21,68 +21,26 @@ Round == Nat \* a round is just a tag on a message
 (* produce messages at a rate strictly higher than that of malicious processes.    *)
 (***********************************************************************************)
 ASSUME Cardinality(W)*tAdv > Cardinality(B)*tWB
-\* TODO: I think we're going to need Cardinality(W)*tAdv > 2*Cardinality(B)*tWB
 
 \* A message consists of a unique ID, a round number, and a coffer containing the IDs of a set of predecessor messages:
 MessageID == P\times Nat
 Message == [id : MessageID, round : Round, coffer : SUBSET MessageID]
 sender(m) == m.id[1]
 
-\* We will need the intersection of a set of sets:
-RECURSIVE Intersection(_)
-Intersection(Ss) ==
-    CASE
-        Ss = {} -> {}
-    []  \E S \in Ss : Ss = {S} -> CHOOSE S \in Ss : Ss = {S}
-    []  OTHER ->
-            LET S == (CHOOSE S \in Ss : TRUE)
-            IN  S \cap Intersection(Ss \ {S})
-
-(********************************************************************************)
-(* A set of messages is consistent when the intersection of the coffers of each *)
-(* message is a strict majority of the coffer of each message.                  *)
-(********************************************************************************)
-ConsistentSet(M) ==
-    LET I == Intersection({m.coffer : m \in M})
-    IN \A m \in M : 2*Cardinality(I) > Cardinality(m.coffer)
-
-(***********************************************************************************)
-(* A consistent chain is a subset of the messages in the DAG that potentially has  *)
-(* some dangling pointers (i.e. messages that have predecessors not in the chain)  *)
-(* and that satisfies the following recursive predicate:                           *)
-(*                                                                                 *)
-(*     * Any set of messages which all have a round of 0 is a consistent chain.    *)
-(*                                                                                 *)
-(*     * A set of messages C with some non-zero rounds and maximal round r is a    *)
-(*     consistent chain when, with Tip being the set of messages in the chain that *)
-(*     have round r and Pred being the set of messages in the chain with round     *)
-(*     r-1, Pred is a strict majority of the set of predecessors of each message   *)
-(*     in Tip and C \ Tip is a consistent chain. (Note that this implies that Tip  *)
-(*     is a consistent set)                                                        *)
-(***********************************************************************************)
-Max(X, Leq(_,_)) ==
-    CHOOSE m \in X : \A x \in X : Leq(x,m)
-
-Maximal(X, Leq(_,_)) ==
-    CHOOSE m \in X : \A x \in X : \neg (Leq(m,x) /\ \neg Leq(x,m))
-
-MaximalElements(X, Leq(_,_)) ==
-    {m \in X : \A x \in X : \neg (Leq(m,x) /\ \neg Leq(x,m))}
-
-RECURSIVE ConsistentChain(_)
-ConsistentChain(M) ==
-    /\  M # {}
-    /\  LET r == Max({m.round : m \in M}, <=) IN
-        \/  r = 0
-        \/  LET Tip == { m \in M : m.round = r }
-                Pred == { m \in M : m.round = r-1 }
-            IN  /\  Tip # {}
-                /\  \E Maj \in SUBSET Pred :
-                    /\  Maj # {}
-                    /\  \A m \in Tip :
-                        /\ \A m2 \in Maj : m2.id \in m.coffer
-                        /\  2*Cardinality(Maj) > Cardinality(m.coffer)
-                /\  ConsistentChain(M \ Tip)
+(**********************************************************************************)
+(* A strongly consistent chain is a subset of the messages in the DAG that        *)
+(* potentially has some dangling pointers (i.e. messages that have predecessors   *)
+(* not in the chain) and that satisfies the following recursive predicate:        *)
+(*                                                                                *)
+(*     * Any set of messages which all have a round of 0 is a strongly consistent *)
+(*     chain.                                                                     *)
+(*                                                                                *)
+(*     * A set of messages C with some non-zero rounds and maximal round r is a   *)
+(*     strongly consistent chain when, with Tip being the set of messages in the  *)
+(*     chain that have round r and Pred being the set of messages in the chain    *)
+(*     with round r-1, Pred is a strict majority of the set of predecessors of    *)
+(*     each message in Tip and C \ Tip is a consistent chain.                     *)
+(**********************************************************************************)
 
 RECURSIVE StronglyConsistentChain(_)
 StronglyConsistentChain(M) ==
@@ -97,31 +55,38 @@ StronglyConsistentChain(M) ==
                     /\  2*Cardinality(Pred) > Cardinality(m.coffer)
                 /\  StronglyConsistentChain(M \ Tip)
 
-ConsistentChains(M) ==
-    LET r == Max({m.round : m \in M}, <=)
-    IN  {C \in SUBSET M : (\E m \in C : m.round = r) /\ ConsistentChain(C)}
+\* A weaker version of the above:
+RECURSIVE ConsistentChain(_)
+ConsistentChain(M) ==
+    /\  M # {}
+    /\  LET r == Max({m.round : m \in M}, <=) IN
+        \/  r = 0
+        \/  LET Tip == { m \in M : m.round = r }
+                Pred == { m \in M : m.round = r-1 }
+            IN  /\  Tip # {}
+                /\  \A m \in Tip :
+                    /\  \E Maj \in SUBSET Pred :
+                        /\  Maj # {}
+                        /\ \A m2 \in Maj : m2.id \in m.coffer
+                        /\  2*Cardinality(Maj) > Cardinality(m.coffer)
+                /\  ConsistentChain(M \ Tip)
 
-StronglyConsistentChains(M) ==
-    LET r == Max({m.round : m \in M}, <=)
-    IN  {C \in SUBSET M : (\E m \in C : m.round = r) /\ StronglyConsistentChain(C)}
+\* The max round of a set of messages is the maximal round of its messages:
+MaxRound(M) == MaxInteger({m.round : m \in M})
 
-(***********************************************************************************)
-(* Given a message DAG, the heaviest consistent chain is a consistent chain in the *)
-(* DAG that has a maximal number of messages.                                      *)
-(***********************************************************************************)
-HeaviestConsistentChain(M) ==
-    LET CCs == ConsistentChains(M)
-    IN  
-        IF CCs = {} THEN {}
-        ELSE Max(CCs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
+SubsetsWithMaxRound(M, r) == {M2 \in SUBSET M : \E m \in M2 : m.round = r}
 
-HeaviestConsistentChains(M) ==
-    LET CCs == ConsistentChains(M)
-    IN  MaximalElements(CCs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
+\* The set of all consistent chains that can be found in M:
+ConsistentChains(M, r) ==
+    {C \in SubsetsWithMaxRound(M, r) : ConsistentChain(C)}
 
-HeaviestStronglyConsistentChains(M) ==
-    LET SCCs == StronglyConsistentChains(M)
-    IN  MaximalElements(SCCs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
+\* The set of all strongly consistent chains that can be found in M:
+StronglyConsistentChains(M, r) ==
+    {C \in SubsetsWithMaxRound(M, r) : StronglyConsistentChain(C)}
+
+HeaviestConsistentChains(M, r) == MaxCardinalitySets(ConsistentChains(M, r))
+
+HeaviestStronglyConsistentChains(M, r) == MaxCardinalitySets(StronglyConsistentChains(M, r))
 
 (*********************************************************************************)
 (* Two chains are disjoint when there is a round smaller than their max round in *)
@@ -133,45 +98,22 @@ DisjointChains(C1,C2) ==
     IN  \E r \in 0..(rmax-1) :
             {m \in C1 : m.round = r} \cap {m \in C2 : m.round = r} = {}
 
-RECURSIVE ComponentOf(_,_)
-\* The connected component of chain C amongs chains Cs
-ComponentOf(C, Cs) ==
-    IF \E C2 \in Cs : \neg DisjointChains(C,C2)
-    THEN
-        LET C2 == CHOOSE C2 \in Cs : \neg DisjointChains(C,C2)
-        IN  ComponentOf(C \union C2, Cs \ {C2})
-    ELSE C
+(*******************)
+(* Acceptance rule *)
+(*******************)
 
-RECURSIVE Components(_)
-\* All the components in Cs:
-Components(Cs) ==
-    IF Cs = {} THEN {}
-    ELSE
-        LET C == CHOOSE C \in Cs : TRUE
-            Comp == ComponentOf(C, Cs)
-         IN  {Comp} \cup Components({C2 \in Cs : DisjointChains(C2, Comp)})
+AcceptedMessages(M,r) == {m \in M :
+    /\  m.round = r-1
+    /\  LET HSCCs == HeaviestStronglyConsistentChains(M,r-1) IN
+        /\  \E C \in HSCCs : m \in C
+        /\  \A C1,C2 \in HSCCs :
+                /\  m \in C1
+                /\  m \notin C2
+                /\  DisjointChains(C1,C2)
+                => Cardinality(C2) <= Cardinality(C1)}
 
-HeaviestComponent(M) ==
-    LET Comps == Components(StronglyConsistentChains(M))
-    IN  
-        IF Comps = {} THEN {}
-        ELSE Max(Comps, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
-
-HeaviestComponents(M) ==
-    LET Comps == Components(HeaviestStronglyConsistentChains(M))
-    IN  
-        IF Comps = {} THEN {}
-        ELSE MaximalElements(Comps, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
-
-Accepted(M) == {m \in M : \A C1,C2 \in StronglyConsistentChains(M) :
-        m \in C1 /\ m \notin C2 /\ DisjointChains(C1,C2) => Cardinality(C1) >= Cardinality(C2)}
-
-Accepted2(M) == {m \in M : \A C1 \in HeaviestConsistentChains(M) :
-        \A C2 \in ConsistentChains(M) :
-            m \in C1 /\ m \notin C2 /\ DisjointChains(C1,C2) => Cardinality(C1) > Cardinality(C2)}
-
-\* M does not having dangling pointers
-Complete(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
+\* M does not having dangling edges:
+Closed(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
 
 (********************************)
 (* Now we specify the algorithm *)
@@ -183,8 +125,8 @@ Complete(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
         tick = 0;
         phase = "start"; \* each tick has two phases: "start" and "end"
         donePhase = [p \in P |-> "end"];
-        pendingMessage = [p \in P |-> <<>>];
-        messageCount = [p \in P |-> 0];
+        pendingMessage = [p \in P |-> <<>>]; \* message we're computing the VDF on
+        messageCount = [p \in P |-> 0]; \* used to generate unique message IDs
     define {
         currentRound == tick \div tWB \* round of well-behaved processes
         wellBehavedMessages == {m \in messages : sender(m) \in P \ B}
@@ -193,7 +135,8 @@ Complete(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
             \* ignore messages from future rounds:
             LET msgs == {m \in messages : m.round < currentRound} IN
             {M \in SUBSET msgs :
-                /\  Complete(M)
+                \* don't use a set of messages that has dangling edges (messages in coffers that are missing):
+                /\  Closed(M)
                 /\  wellBehavedMessages \subseteq  M}
     }
     macro sendMessage(m) {
@@ -217,8 +160,7 @@ l1:     while (TRUE) {
             if (tick % tWB = 0) {
                 \* Start the VDF computation for the next message:
                 with (msgs \in receivedMsgsSets)
-                with (C = Accepted(msgs))
-                with (predMsgs = {m \in C : m.round = currentRound-1}) {
+                with (predMsgs = AcceptedMessages(msgs, currentRound)) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
                         round |-> currentRound,
@@ -261,6 +203,7 @@ lb2:        await phase = "end";
 }
 *)
 
+\* Invariant describing the type of the variables:
 TypeOK == 
     /\  messages \in SUBSET Message
     /\  pendingMessage \in [P -> Message \cup {<<>>}]
@@ -268,8 +211,6 @@ TypeOK ==
     /\  phase \in {"start", "end"}
     /\  donePhase \in [P -> {"start", "end"}]
     /\  messageCount \in [P -> Nat]
-
-messageWithID(id) == CHOOSE m \in messages : m.id = id
 
 (**********************************************************************************)
 (* The main property we want to establish is that, each round, for each message m *)
@@ -284,6 +225,9 @@ Safety == \A p \in P \ B : LET m == pendingMessage[p] IN
     /\  \A m2 \in wellBehavedMessages : m2.round = m.round-1 => m2.id \in m.coffer
     /\  LET M == {m2 \in wellBehavedMessages : m2.round = m.round-1}
         IN  2*Cardinality(M) > Cardinality(m.coffer)
+
+\* helper definition:
+messageWithID(id) == CHOOSE m \in messages : m.id = id
 
 \* Basic well-formedness properties:    
 Inv1 == \A m \in messages : 
