@@ -7,8 +7,8 @@ CONSTANTS
 
 P == {p1,p2,p3}
 B == {p1}
-tAdv == 3
-tWB == 4
+tAdv == 2
+tWB == 3
 
 \* 50 minutes, depth 104, to finish tick 12:
 \* P == {p1,p2,p3}
@@ -23,7 +23,7 @@ tWB == 4
 \* tWB == 1
 
 \* We use the following definition to bound the state-space for the model-checker
-MaxTick == 18 \* Do we need that?
+MaxTick == 6 \* Do we need that?
 MCTick == 0..MaxTick
 MaxRound == MaxTick \div tAdv
 MCRound == 0..MaxRound
@@ -35,7 +35,7 @@ INSTANCE VDFConsensus
 Sym == Permutations(P \ B)\cup Permutations(B) 
 
 TickConstraint == tick <= MaxTick
-\* With this we let the adversary build an initial "thin" chain of length 3:
+\* With this constraint we let the adversary build an initial "thin" chain of length 3:
 AdvConstraint == \A m1,m2 \in messages :
     /\  sender(m1) \in B
     /\  sender(m2) \in B
@@ -43,7 +43,6 @@ AdvConstraint == \A m1,m2 \in messages :
     /\  m2.round <= 2
     /\  m1.round = m2.round
     => m1 = m2
-\* With tAdv = 3, we need to go to rick 
 
 Canary1 == \neg (
     tick = 12
@@ -53,24 +52,75 @@ Canary1 == \neg (
 Canary2 == \neg (
     tick = 5 /\ \E m \in messages : m.sender = p1 /\ m.round = 2
 )
-        
-myMsgs == {
+
+\* Examples of components of (strongly) consistent chains:
+
+M == {
     [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
     [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
     [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-    [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>}],
+    [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
+    [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}],
     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-    [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}] }
-    
-myMsgs2 == {
-    [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-    [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-    [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-    [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>}],
-    [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-    [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}] }
-    
+    [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}] }
 
-Expr == <<HeaviestConsistentChain(myMsgs2), HeaviestConsistentChains(myMsgs2)>>
+ASSUME Components(StronglyConsistentChains(M)) = 
+    {
+        {
+            [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+            [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
+            [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}]
+        },
+        {
+            [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+            [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+            [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+            [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
+        }
+    }
 
+
+ASSUME Components(ConsistentChains(M)) = {
+    {
+        [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+        [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+        [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+        [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
+        [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}]},
+    {
+        [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+        [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+        [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+        [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+        [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
+    }
+}
+
+M2 == 
+    {
+        [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+        [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}],
+        [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+        [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+        [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>}],
+        [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+        [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
+    }
+
+ASSUME Components(StronglyConsistentChains(M2)) = 
+    {
+        {
+            [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+            [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}],
+            [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+            [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>}]
+        },
+        {
+            [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+            [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+            [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+            [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
+        }
+    }
+    
 ==========================================================

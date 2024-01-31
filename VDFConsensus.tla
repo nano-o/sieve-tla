@@ -63,13 +63,12 @@ ConsistentSet(M) ==
 Max(X, Leq(_,_)) ==
     CHOOSE m \in X : \A x \in X : Leq(x,m)
 
+Maximal(X, Leq(_,_)) ==
+    CHOOSE m \in X : \A x \in X : \neg (Leq(m,x) /\ \neg Leq(x,m))
+
 MaximalElements(X, Leq(_,_)) ==
     {m \in X : \A x \in X : \neg (Leq(m,x) /\ \neg Leq(x,m))}
 
-(**********************************************************************************)
-(* TODO this might be too restrictive: maybe we should only require that a subset *)
-(* of Pred be a strict majority of the set of predecessors of each message in Tip *)
-(**********************************************************************************)
 RECURSIVE ConsistentChain(_)
 ConsistentChain(M) ==
     /\  M # {}
@@ -85,38 +84,73 @@ ConsistentChain(M) ==
                         /\  2*Cardinality(Maj) > Cardinality(m.coffer)
                 /\  ConsistentChain(M \ Tip)
 
+RECURSIVE StronglyConsistentChain(_)
+StronglyConsistentChain(M) ==
+    /\  M # {}
+    /\  LET r == Max({m.round : m \in M}, <=) IN
+        \/  r = 0
+        \/  LET Tip == { m \in M : m.round = r }
+                Pred == { m \in M : m.round = r-1 }
+            IN  /\  Tip # {}
+                /\  \A m \in Tip :
+                    /\ \A m2 \in Pred : m2.id \in m.coffer
+                    /\  2*Cardinality(Pred) > Cardinality(m.coffer)
+                /\  ConsistentChain(M \ Tip)
+
+ConsistentChains(M) ==
+    LET r == Max({m.round : m \in M}, <=)
+    IN  {C \in SUBSET M : (\E m \in C : m.round = r) /\ ConsistentChain(C)}
+
+StronglyConsistentChains(M) ==
+    LET r == Max({m.round : m \in M}, <=)
+    IN  {C \in SUBSET M : (\E m \in C : m.round = r) /\ StronglyConsistentChain(C)}
+
 (***********************************************************************************)
 (* Given a message DAG, the heaviest consistent chain is a consistent chain in the *)
 (* DAG that has a maximal number of messages.                                      *)
 (***********************************************************************************)
 HeaviestConsistentChain(M) ==
-    LET r == Max({m.round : m \in M}, <=)
-        Cs == {C \in SUBSET M : (\E m \in C : m.round = r) /\ ConsistentChain(C)}
+    LET CCs == ConsistentChains(M)
     IN  
-        IF Cs = {} THEN {}
-        ELSE Max(Cs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
+        IF CCs = {} THEN {}
+        ELSE Max(CCs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 
 HeaviestConsistentChains(M) ==
-    LET r == Max({m.round : m \in M}, <=)
-        Cs == {C \in SUBSET M : (\E m \in C : m.round = r) /\ ConsistentChain(C)}
-    IN  MaximalElements(Cs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
+    LET CCs == ConsistentChains(M)
+    IN  MaximalElements(CCs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 
 (***********************************************************************************)
 (* Two chains are disjoint when there is a round in which they have no messages in *)
 (* common:                                                                         *)
 (***********************************************************************************)
 DisjointChains(C1,C2) ==
-    LET r1 == Max({m.round : m \in C1}, <=)
-        r2 == Max({m.round : m \in C2}, <=)
-    IN  \E r \in Round :
-            /\  r <= r1
-            /\  r <= r2
-            /\  {m \in C1 : m.round = r} \cap {m \in C2 : m.round = r} = {}
+    LET rmax == Max({m.round : m \in C1 \cup C2}, <=)
+    IN  \E r \in 0..rmax :
+            {m \in C1 : m.round = r} \cap {m \in C2 : m.round = r} = {}
 
-(**********************************************************************************)
-(* TODO: maximal partition of the hccs so that chains in different partitions are *)
-(* disjoint. Then take largest.                                                   *)
-(**********************************************************************************)
+RECURSIVE ComponentOf(_,_)
+\* The connected component of chain C amongs chains Cs
+ComponentOf(C, Cs) ==
+    IF \E C2 \in Cs : \neg DisjointChains(C,C2)
+    THEN
+        LET C2 == CHOOSE C2 \in Cs : \neg DisjointChains(C,C2)
+        IN  ComponentOf(C \union C2, Cs \ {C2})
+    ELSE C
+
+RECURSIVE Components(_)
+\* All the components in Cs:
+Components(Cs) ==
+    IF Cs = {} THEN {}
+    ELSE
+        LET C == CHOOSE C \in Cs : TRUE
+            Comp == ComponentOf(C, Cs)
+         IN  {Comp} \cup Components({C2 \in Cs : DisjointChains(C2, Comp)})
+
+HeaviestComponent(M) ==
+    LET Comps == Components(StronglyConsistentChains(M))
+    IN  m
+        IF Comps = {} THEN {}
+        ELSE Max(Comps, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 
 (********************************)
 (* Now we specify the algorithm *)
@@ -161,8 +195,8 @@ l1:     while (TRUE) {
             if (tick % tWB = 0) {
                 \* Start the VDF computation for the next message:
                 with (msgs \in receivedMsgsSets)
-                with (hCC = UNION HeaviestConsistentChains(msgs))
-                with (predMsgs = {m \in hCC : m.round = currentRound-1}) {
+                with (C = HeaviestComponent(msgs))
+                with (predMsgs = {m \in C : m.round = currentRound-1}) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
                         round |-> currentRound,
@@ -204,6 +238,7 @@ lb2:        await phase = "end";
     }
 }
 *)
+
 TypeOK == 
     /\  messages \in SUBSET Message
     /\  pendingMessage \in [P -> Message \cup {<<>>}]
