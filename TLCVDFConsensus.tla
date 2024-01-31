@@ -23,10 +23,10 @@ tWB == 3
 \* tWB == 1
 
 \* We use the following definition to bound the state-space for the model-checker
-MaxTick == 6 \* Do we need that?
-MCTick == 0..MaxTick
-MaxRound == MaxTick \div tAdv
-MCRound == 0..MaxRound
+MaxTick == 18
+\* MCTick == 0..MaxTick
+\* MaxRound == MaxTick \div tAdv
+\* MCRound == 0..MaxRound
 
 VARIABLES messages, pendingMessage, tick, phase, donePhase, pc, messageCount
 
@@ -55,72 +55,72 @@ Canary2 == \neg (
 
 \* Examples of components of (strongly) consistent chains:
 
-M == {
-    [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-    [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-    [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-    [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
-    [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}],
-    [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-    [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}] }
+\* M == {
+\*     [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+\*     [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+\*     [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+\*     [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
+\*     [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}],
+\*     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+\*     [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}] }
 
-ASSUME Components(StronglyConsistentChains(M)) = 
-    {
-        {
-            [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-            [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
-            [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}]
-        },
-        {
-            [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-            [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-            [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-            [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
-        }
-    }
+\* ASSUME Components(StronglyConsistentChains(M)) = 
+\*     {
+\*         {
+\*             [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+\*             [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
+\*             [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}]
+\*         },
+\*         {
+\*             [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+\*             [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+\*             [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+\*             [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
+\*         }
+\*     }
 
 
-ASSUME Components(ConsistentChains(M)) = {
-    {
-        [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-        [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-        [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-        [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
-        [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}]},
-    {
-        [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-        [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-        [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-        [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-        [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
-    }
-}
+\* ASSUME Components(ConsistentChains(M)) = {
+\*     {
+\*         [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+\*         [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
+\*         [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}]},
+\*     {
+\*         [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+\*         [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+\*         [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
+\*     }
+\* }
 
-M2 == 
-    {
-        [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-        [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}],
-        [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-        [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-        [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>}],
-        [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-        [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
-    }
+\* M2 == 
+\*     {
+\*         [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+\*         [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}],
+\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+\*         [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>}],
+\*         [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+\*         [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
+\*     }
 
-ASSUME Components(StronglyConsistentChains(M2)) = 
-    {
-        {
-            [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-            [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}],
-            [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-            [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>}]
-        },
-        {
-            [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-            [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-            [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-            [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
-        }
-    }
+\* ASSUME Components(StronglyConsistentChains(M2)) = 
+\*     {
+\*         {
+\*             [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+\*             [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}],
+\*             [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+\*             [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>}]
+\*         },
+\*         {
+\*             [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+\*             [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+\*             [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+\*             [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
+\*         }
+\*     }
     
 ==========================================================

@@ -95,7 +95,7 @@ StronglyConsistentChain(M) ==
                 /\  \A m \in Tip :
                     /\ \A m2 \in Pred : m2.id \in m.coffer
                     /\  2*Cardinality(Pred) > Cardinality(m.coffer)
-                /\  ConsistentChain(M \ Tip)
+                /\  StronglyConsistentChain(M \ Tip)
 
 ConsistentChains(M) ==
     LET r == Max({m.round : m \in M}, <=)
@@ -119,13 +119,18 @@ HeaviestConsistentChains(M) ==
     LET CCs == ConsistentChains(M)
     IN  MaximalElements(CCs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 
-(***********************************************************************************)
-(* Two chains are disjoint when there is a round in which they have no messages in *)
-(* common:                                                                         *)
-(***********************************************************************************)
+HeaviestStronglyConsistentChains(M) ==
+    LET SCCs == StronglyConsistentChains(M)
+    IN  MaximalElements(SCCs, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
+
+(*********************************************************************************)
+(* Two chains are disjoint when there is a round smaller than their max round in *)
+(* which they have no messages in common. We assume C1 and C2 have the same max  *)
+(* round.                                                                        *)
+(*********************************************************************************)
 DisjointChains(C1,C2) ==
     LET rmax == Max({m.round : m \in C1 \cup C2}, <=)
-    IN  \E r \in 0..rmax :
+    IN  \E r \in 0..(rmax-1) :
             {m \in C1 : m.round = r} \cap {m \in C2 : m.round = r} = {}
 
 RECURSIVE ComponentOf(_,_)
@@ -153,15 +158,20 @@ HeaviestComponent(M) ==
         ELSE Max(Comps, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 
 HeaviestComponents(M) ==
-    LET Comps == Components(StronglyConsistentChains(M))
+    LET Comps == Components(HeaviestStronglyConsistentChains(M))
     IN  
         IF Comps = {} THEN {}
         ELSE MaximalElements(Comps, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 
-(***********************************************************************************)
-(* A set of chains is a partition of the set of messages when each message is in   *)
-(* exactly one chain and the chains are disjoint.                                  *)
-(***********************************************************************************)
+Accepted(M) == {m \in M : \A C1,C2 \in StronglyConsistentChains(M) :
+        m \in C1 /\ m \notin C2 /\ DisjointChains(C1,C2) => Cardinality(C1) >= Cardinality(C2)}
+
+Accepted2(M) == {m \in M : \A C1 \in HeaviestConsistentChains(M) :
+        \A C2 \in ConsistentChains(M) :
+            m \in C1 /\ m \notin C2 /\ DisjointChains(C1,C2) => Cardinality(C1) > Cardinality(C2)}
+
+\* M does not having dangling pointers
+Complete(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
 
 (********************************)
 (* Now we specify the algorithm *)
@@ -182,8 +192,9 @@ HeaviestComponents(M) ==
         receivedMsgsSets == 
             \* ignore messages from future rounds:
             LET msgs == {m \in messages : m.round < currentRound} IN
-            {wellBehavedMessages \cup byzMsgs :
-                byzMsgs \in SUBSET (msgs \ wellBehavedMessages)}
+            {M \in SUBSET msgs :
+                /\  Complete(M)
+                /\  wellBehavedMessages \subseteq  M}
     }
     macro sendMessage(m) {
         messages := messages \cup {m}
@@ -206,7 +217,7 @@ l1:     while (TRUE) {
             if (tick % tWB = 0) {
                 \* Start the VDF computation for the next message:
                 with (msgs \in receivedMsgsSets)
-                with (C = UNION HeaviestComponents(msgs))
+                with (C = Accepted(msgs))
                 with (predMsgs = {m \in C : m.round = currentRound-1}) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
@@ -249,116 +260,6 @@ lb2:        await phase = "end";
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "9ce24e38" /\ chksum(tla) = "72d6fc36")
-\* Label tick of process clock at line 192 col 9 changed to tick_
-VARIABLES messages, tick, phase, donePhase, pendingMessage, messageCount, pc
-
-(* define statement *)
-currentRound == tick \div tWB
-wellBehavedMessages == {m \in messages : sender(m) \in P \ B}
-
-receivedMsgsSets ==
-
-    LET msgs == {m \in messages : m.round < currentRound} IN
-    {wellBehavedMessages \cup byzMsgs :
-        byzMsgs \in SUBSET (msgs \ wellBehavedMessages)}
-
-
-vars == << messages, tick, phase, donePhase, pendingMessage, messageCount, pc
-        >>
-
-ProcSet == ({"clock"}) \cup (P \ B) \cup (B)
-
-Init == (* Global variables *)
-        /\ messages = {}
-        /\ tick = 0
-        /\ phase = "start"
-        /\ donePhase = [p \in P |-> "end"]
-        /\ pendingMessage = [p \in P |-> <<>>]
-        /\ messageCount = [p \in P |-> 0]
-        /\ pc = [self \in ProcSet |-> CASE self \in {"clock"} -> "tick_"
-                                        [] self \in P \ B -> "l1"
-                                        [] self \in B -> "lb1"]
-
-tick_(self) == /\ pc[self] = "tick_"
-               /\ \A p \in P : donePhase[p] = phase
-               /\ IF phase = "start"
-                     THEN /\ phase' = "end"
-                          /\ tick' = tick
-                     ELSE /\ phase' = "start"
-                          /\ tick' = tick+1
-               /\ pc' = [pc EXCEPT ![self] = "tick_"]
-               /\ UNCHANGED << messages, donePhase, pendingMessage, 
-                               messageCount >>
-
-clock(self) == tick_(self)
-
-l1(self) == /\ pc[self] = "l1"
-            /\ phase = "start"
-            /\ IF tick % tWB = 0
-                  THEN /\ \E msgs \in receivedMsgsSets:
-                            LET C == UNION HeaviestComponents(msgs) IN
-                              LET predMsgs == {m \in C : m.round = currentRound-1} IN
-                                /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
-                                                                                      id |-> <<self,messageCount[self]+1>>,
-                                                                                      round |-> currentRound,
-                                                                                      coffer |-> {m.id : m \in predMsgs}]]
-                                /\ messageCount' = [messageCount EXCEPT ![self] = messageCount[self]+1]
-                  ELSE /\ TRUE
-                       /\ UNCHANGED << pendingMessage, messageCount >>
-            /\ donePhase' = [donePhase EXCEPT ![self] = "start"]
-            /\ pc' = [pc EXCEPT ![self] = "l2"]
-            /\ UNCHANGED << messages, tick, phase >>
-
-l2(self) == /\ pc[self] = "l2"
-            /\ phase = "end"
-            /\ IF tick % tWB = tWB - 1
-                  THEN /\ messages' = (messages \cup {(pendingMessage[self])})
-                  ELSE /\ TRUE
-                       /\ UNCHANGED messages
-            /\ donePhase' = [donePhase EXCEPT ![self] = "end"]
-            /\ pc' = [pc EXCEPT ![self] = "l1"]
-            /\ UNCHANGED << tick, phase, pendingMessage, messageCount >>
-
-proc(self) == l1(self) \/ l2(self)
-
-lb1(self) == /\ pc[self] = "lb1"
-             /\ phase = "start"
-             /\ IF tick % tAdv = 0
-                   THEN /\ LET maxRound == Max({m.round : m \in messages} \cup {0}, <=) IN
-                             \E rnd \in {maxRound, maxRound+1}:
-                               \E predMsgs \in SUBSET {m \in messages : m.round = rnd-1}:
-                                 /\ rnd > 0 => predMsgs # {}
-                                 /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
-                                                                                       id |-> <<self,messageCount[self]+1>>,
-                                                                                       round |-> rnd,
-                                                                                       coffer |-> {m.id : m \in predMsgs}]]
-                                 /\ messageCount' = [messageCount EXCEPT ![self] = messageCount[self]+1]
-                   ELSE /\ TRUE
-                        /\ UNCHANGED << pendingMessage, messageCount >>
-             /\ donePhase' = [donePhase EXCEPT ![self] = "start"]
-             /\ pc' = [pc EXCEPT ![self] = "lb2"]
-             /\ UNCHANGED << messages, tick, phase >>
-
-lb2(self) == /\ pc[self] = "lb2"
-             /\ phase = "end"
-             /\ IF tick % tAdv = tAdv - 1
-                   THEN /\ messages' = (messages \cup {(pendingMessage[self])})
-                   ELSE /\ TRUE
-                        /\ UNCHANGED messages
-             /\ donePhase' = [donePhase EXCEPT ![self] = "end"]
-             /\ pc' = [pc EXCEPT ![self] = "lb1"]
-             /\ UNCHANGED << tick, phase, pendingMessage, messageCount >>
-
-byz(self) == lb1(self) \/ lb2(self)
-
-Next == (\E self \in {"clock"}: clock(self))
-           \/ (\E self \in P \ B: proc(self))
-           \/ (\E self \in B: byz(self))
-
-Spec == Init /\ [][Next]_vars
-
-\* END TRANSLATION 
 
 TypeOK == 
     /\  messages \in SUBSET Message
