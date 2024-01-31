@@ -42,37 +42,31 @@ sender(m) == m.id[1]
 (*     each message in Tip and C \ Tip is a consistent chain.                     *)
 (**********************************************************************************)
 
-RECURSIVE StronglyConsistentChain(_)
-StronglyConsistentChain(M) ==
-    /\  M # {}
-    /\  LET r == Max({m.round : m \in M}, <=) IN
-        \/  r = 0
-        \/  LET Tip == { m \in M : m.round = r }
-                Pred == { m \in M : m.round = r-1 }
-            IN  /\  Tip # {}
-                /\  \A m \in Tip :
-                    /\ \A m2 \in Pred : m2.id \in m.coffer
-                    /\  2*Cardinality(Pred) > Cardinality(m.coffer)
-                /\  StronglyConsistentChain(M \ Tip)
-
-\* A weaker version of the above:
-RECURSIVE ConsistentChain(_)
-ConsistentChain(M) ==
-    /\  M # {}
-    /\  LET r == Max({m.round : m \in M}, <=) IN
-        \/  r = 0
-        \/  LET Tip == { m \in M : m.round = r }
-                Pred == { m \in M : m.round = r-1 }
-            IN  /\  Tip # {}
-                /\  \A m \in Tip :
-                    /\  \E Maj \in SUBSET Pred :
-                        /\  Maj # {}
-                        /\ \A m2 \in Maj : m2.id \in m.coffer
-                        /\  2*Cardinality(Maj) > Cardinality(m.coffer)
-                /\  ConsistentChain(M \ Tip)
-
 \* The max round of a set of messages is the maximal round of its messages:
 MaxRound(M) == MaxInteger({m.round : m \in M})
+
+StronglyConsistentChain(M) ==
+    /\  M # {}
+    /\  \/  MaxRound(M) = 0
+        \/  \A r \in 1..MaxRound(M) :
+            LET Tip == { m \in M : m.round = r }
+                Pred == { m \in M : m.round = r-1 }
+            IN  /\  Tip # {}
+                /\  \A m \in Tip :
+                    /\  {m2.id : m2 \in Pred} \subseteq m.coffer
+                    /\  2*Cardinality(Pred) > Cardinality(m.coffer)
+
+\* A weaker version of the above:
+ConsistentChain(M) ==
+    /\  M # {}
+    /\  \/  MaxRound(M) = 0
+        \/  \A r \in 1..MaxRound(M) :
+            LET Tip == { m \in M : m.round = r }
+                Pred == { m \in M : m.round = r-1 }
+            IN  /\  Tip # {}
+                /\  \A m \in Tip : \E Maj \in SUBSET Pred :
+                    /\ {m2.id : m2 \in Maj} \subseteq m.coffer
+                    /\  2*Cardinality(Maj) > Cardinality(m.coffer)
 
 SubsetsWithMaxRound(M, r) == {M2 \in SUBSET M : \E m \in M2 : m.round = r}
 
@@ -112,7 +106,7 @@ AcceptedMessages(M,r) == {m \in M :
                 /\  DisjointChains(C1,C2)
                 => Cardinality(C2) <= Cardinality(C1)}
 
-\* M does not having dangling edges:
+\* M does not have dangling edges:
 Closed(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
 
 (********************************)
@@ -202,6 +196,7 @@ lb2:        await phase = "end";
     }
 }
 *)
+
 
 \* Invariant describing the type of the variables:
 TypeOK == 

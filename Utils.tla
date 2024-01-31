@@ -3,14 +3,7 @@
 EXTENDS Integers, FiniteSets
 
 \* The intersection of a set of sets:
-RECURSIVE Intersection(_)
-Intersection(Ss) ==
-    CASE
-        Ss = {} -> {}
-    []  \E S \in Ss : Ss = {S} -> CHOOSE S \in Ss : Ss = {S}
-    []  OTHER ->
-            LET S == (CHOOSE S \in Ss : TRUE)
-            IN  S \cap Intersection(Ss \ {S})
+Intersection(Ss) == {x \in UNION Ss : \A S \in Ss : x \in S}
 
 Max(X, Leq(_,_)) ==
     CHOOSE m \in X : \A x \in X : Leq(x,m)
