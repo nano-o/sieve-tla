@@ -3,32 +3,73 @@
 EXTENDS Integers, FiniteSets, TLC
 
 CONSTANTS
-    \* p1, p2, p3
-    p1, p2, p3, p4, p5
+    p1, p2, p3
+    \* p1, p2, p3, p4, p5
 
-MaxTick == 3
+MaxTick == 18
 
-P == {p1,p2,p3,p4,p5}
-B == {p4,p5}
-tAdv == 1
-tWB == 1
+P == {p1,p2,p3}
+B == {p1}
+tAdv == 2
+tWB == 3
 
-\* 50 minutes, depth 104, to finish tick 12:
+\* with SCC rule, violation at tick 9 (depth 74):
 \* P == {p1,p2,p3}
 \* B == {p1}
-\* tAdv == 3
-\* tWB == 4
+\* tAdv == 2
+\* tWB == 3
 
-\* 5m40s to get to tick 4 with this config:
+\* with SCC rule, violation at tick 9 (depth 74):
 \* P == {p1,p2,p3}
 \* B == {p1}
-\* tAdv == 1
-\* tWB == 1
+\* tAdv == 2
+\* tWB == 3
 
+\* violation (as expected) at tick 6 found in 4 minutes:
+\* P == {p1,p2,p3,p4,p5}
+\* B == {p4,p5}
+\* tAdv == 2
+\* tWB == 3
 
 VARIABLES messages, pendingMessage, tick, phase, donePhase, pc, messageCount
 
 INSTANCE VDFConsensus
+
+M == {
+    [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}], 
+    [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}], 
+    [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
+    [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
+    [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>, <<p3, 1>>}], 
+    [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}], 
+    [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
+}
+
+Expr == HeaviestStronglyConsistentChains(M, 1)
+
+ASSUME Expr = {{
+    [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+    [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}], 
+    [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
+    [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
+    [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>, <<p3, 1>>}]
+}}
+
+Expr1 == HeaviestStronglyConsistentChains({
+    [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+    [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+    [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+    [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
+    [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+    [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+    [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]}, 1)
+    
+ASSUME Expr1 = {{
+        [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+        [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
+        [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}], 
+        [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}], 
+        [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}] }}
 
 Sym == Permutations(P \ B)\cup Permutations(B) 
 
@@ -43,7 +84,7 @@ AdvConstraint == \A m1,m2 \in messages :
     => m1 = m2
 
 Canary1 == \neg (
-    tick = 3
+    tick = 2 /\ phase = "end"
 )
 
 \* Check that the adversary can indeed outpace the round number of well-behaved nodes:

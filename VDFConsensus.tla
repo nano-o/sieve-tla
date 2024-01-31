@@ -84,23 +84,21 @@ HeaviestStronglyConsistentChains(M, r) == MaxCardinalitySets(StronglyConsistentC
 
 (*********************************************************************************)
 (* Two chains are disjoint when there is a round smaller than their max round in *)
-(* which they have no messages in common. We assume C1 and C2 have the same max  *)
-(* round.                                                                        *)
+(* which they have no messages in common.                                        *)
 (*********************************************************************************)
 DisjointChains(C1,C2) ==
-    LET rmax == Max({m.round : m \in C1 \cup C2}, <=)
+    LET rmax == MaxRound(C1 \cup C2)
     IN  \E r \in 0..(rmax-1) :
             {m \in C1 : m.round = r} \cap {m \in C2 : m.round = r} = {}
 
 (*******************)
 (* Acceptance rule *)
 (*******************)
-
 AcceptedMessages(M,r) == {m \in M :
     /\  m.round = r-1
-    /\  LET HSCCs == HeaviestStronglyConsistentChains(M,r-1) IN
-        /\  \E C \in HSCCs : m \in C
-        /\  \A C1,C2 \in HSCCs :
+    /\  LET CCs == StronglyConsistentChains(M,r-1) IN
+        /\  \E C \in CCs : m \in C
+        /\  \A C1,C2 \in CCs :
                 /\  m \in C1
                 /\  m \notin C2
                 /\  DisjointChains(C1,C2)
@@ -196,7 +194,6 @@ lb2:        await phase = "end";
     }
 }
 *)
-
 
 \* Invariant describing the type of the variables:
 TypeOK == 
