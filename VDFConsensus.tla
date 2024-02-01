@@ -68,22 +68,18 @@ ConsistentChain(M) ==
                     /\ {m2.id : m2 \in Maj} \subseteq m.coffer
                     /\  2*Cardinality(Maj) > Cardinality(m.coffer)
 
+Chains(M,r) == {C \in SUBSET M :
+    /\  \A m \in C : m.round <= r
+    /\  \A r2 \in 0..r : \E m \in C : m.round = r2}
 
-RECURSIVE Chains(_,_)
-Chains(M,r) ==
-    LET MM == {m \in M : m.round = r} IN
-        IF r = 0
-        THEN {M1 : M1 \in (SUBSET MM) \ {}}
-        ELSE {M1 \cup M2 : M1 \in (SUBSET MM) \ {}, M2 \in Chains(M \ MM, r-1)}
-    
 \* The set of all consistent chains that can be found in M:
 ConsistentChains(M, r) ==
     {C \in Chains(M, r) : ConsistentChain(C)}
-
+        
 \* The set of all strongly consistent chains that can be found in M:
 StronglyConsistentChains(M, r) ==
     {C \in Chains(M, r) : StronglyConsistentChain(C)}
-        
+    
 (*****************************************************************************)
 (* We can rank the chains by wheight, i.e. just their cardinality, or we can *)
 (* consider the maximal or minimal one in the subset order:                  *)
@@ -183,6 +179,7 @@ l2:         await phase = "end";
     {
 lb1:    while (TRUE) {
             await phase = "start";
+            when currentRound < 2; \* TODO temporary hack
             if (tick % tAdv = 0) {
                 \* Start the VDF computation for the next message:
                 with (maxRound = Max({m.round : m \in messages} \cup {0}, <=))
