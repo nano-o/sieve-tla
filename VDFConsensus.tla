@@ -1,6 +1,6 @@
 ------------ MODULE VDFConsensus ----------------
 
-EXTENDS FiniteSets, Integers, Utils
+EXTENDS FiniteSets, Integers, Utils, TLC
 
 CONSTANTS
     P \* the set of processes
@@ -91,12 +91,14 @@ MaximalStronglyConsistentChains(M, r) == MaximalSets(StronglyConsistentChains(M,
 
 (*********************************************************************************)
 (* Two chains are disjoint when there is a round smaller than their max round in *)
-(* which they have no messages in common.                                        *)
+(* which they share less than a strict majority of their messages.               *)
 (*********************************************************************************)
 DisjointChains(C1,C2) ==
     LET rmax == MaxRound(C1 \cup C2)
     IN  \E r \in 0..(rmax-1) :
-            {m \in C1 : m.round = r} \cap {m \in C2 : m.round = r} = {}
+        LET I == {m \in C1 : m.round = r} \cap {m \in C2 : m.round = r}
+        IN  \/  2*Cardinality(I) < Cardinality(C1)
+            \/  2*Cardinality(I) < Cardinality(C2)
 
 (*******************)
 (* Acceptance rule *)
@@ -179,7 +181,7 @@ l2:         await phase = "end";
     {
 lb1:    while (TRUE) {
             await phase = "start";
-            when currentRound < 2; \* TODO temporary hack
+            \* when currentRound < 2; \* TODO temporary hack
             if (tick % tAdv = 0) {
                 \* Start the VDF computation for the next message:
                 with (maxRound = Max({m.round : m \in messages} \cup {0}, <=))

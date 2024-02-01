@@ -2,20 +2,21 @@
 
 EXTENDS Integers, FiniteSets, TLC
 
-CONSTANTS
-    p1, p2, p3, p4, p5
-
-P == {p1,p2,p3,p4,p5}
-B == {p4,p5}
-tAdv == 1
-tWB == 1
-
 \* CONSTANTS
-\*   p1, p2, p3
-\* P == {p1,p2,p3}
-\* B == {p1}
-\* tAdv == 2
-\* tWB == 3
+\*     p1, p2, p3, p4, p5
+\* No error up to tick 28 included:
+\* P == {p1,p2,p3,p4,p5}
+\* B == {p4,p5}
+\* in this case, 3/4 is only interesting if we can get to round 3 (otherwise there's no real adversarial advantage compared to 1/1)
+\* tAdv == 1
+\* tWB == 1
+
+CONSTANTS
+    p1, p2, p3
+P == {p1,p2,p3}
+B == {p1}
+tAdv == 2
+tWB == 3
 
 Sym == Permutations(P \ B)\cup Permutations(B)
 
@@ -76,17 +77,61 @@ AdvConstraint == \A m1,m2 \in messages :
 \* Examples
 
 \* defeats MinSCCs (p4 and p5 malicious); coffer {<<p3,2>>} possible at round 2:
-M1 == {
-    [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-    [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
-    [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
-    [round |-> 0, id |-> <<p4, 1>>, coffer |-> {}], 
-    [round |-> 0, id |-> <<p5, 1>>, coffer |-> {}], 
-    [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], 
-    [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], 
-    [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>, <<p4, 1>>, <<p5, 1>>}],
-    [round |-> 1, id |-> <<p4, 2>>, coffer |-> {<<p4, 1>>}], 
-    [round |-> 1, id |-> <<p5, 2>>, coffer |-> {<<p5, 1>>}]
+\* M1 == {
+\*     [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+\*     [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
+\*     [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
+\*     [round |-> 0, id |-> <<p4, 1>>, coffer |-> {}], 
+\*     [round |-> 0, id |-> <<p5, 1>>, coffer |-> {}], 
+\*     [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], 
+\*     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], 
+\*     [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>, <<p4, 1>>, <<p5, 1>>}],
+\*     [round |-> 1, id |-> <<p4, 2>>, coffer |-> {<<p4, 1>>}], 
+\*     [round |-> 1, id |-> <<p5, 2>>, coffer |-> {<<p5, 1>>}]
+\* }
+
+\* defeats MaxSCCs, coffer with all round 1 messages possible at round 2:
+M2 == {[round |-> 0, id |-> <<p1, 1>>, coffer |-> {}], [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}], [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p2, 1>>}], [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}]}
+
+Expr == MaximalStronglyConsistentChains(M2, 1)
+ASSUME Expr = {
+    {
+        [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}], 
+        [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}]
+    }, 
+    {
+        [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
+        [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p2, 1>>}]
+    }, 
+    {
+        [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}], 
+        [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
+        [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
+        [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], 
+        [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}]
+    }
 }
+
+C1 == {
+        [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
+        [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p2, 1>>}]
+    }
+C2 == {
+        [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}], 
+        [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
+        [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
+        [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], 
+        [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}]
+    }
+
+ASSUME DisjointChains(C1,C2)
+
+Expr2 == AcceptedMessages(M2,2)
+\* ASSUME Expr2 = {
+\*     [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}], 
+\*     [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p2, 1>>}], 
+\*     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], 
+\*     [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}]
+\* }
 
 ==========================================================
