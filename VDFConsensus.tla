@@ -68,15 +68,21 @@ ConsistentChain(M) ==
                     /\ {m2.id : m2 \in Maj} \subseteq m.coffer
                     /\  2*Cardinality(Maj) > Cardinality(m.coffer)
 
-SubsetsWithMaxRound(M, r) == {M2 \in SUBSET M : \E m \in M2 : m.round = r}
 
+RECURSIVE Chains(_,_)
+Chains(M,r) ==
+    LET MM == {m \in M : m.round = r} IN
+        IF r = 0
+        THEN {M1 : M1 \in (SUBSET MM) \ {}}
+        ELSE {M1 \cup M2 : M1 \in (SUBSET MM) \ {}, M2 \in Chains(M \ MM, r-1)}
+    
 \* The set of all consistent chains that can be found in M:
 ConsistentChains(M, r) ==
-    {C \in SubsetsWithMaxRound(M, r) : ConsistentChain(C)}
+    {C \in Chains(M, r) : ConsistentChain(C)}
 
 \* The set of all strongly consistent chains that can be found in M:
 StronglyConsistentChains(M, r) ==
-    {C \in SubsetsWithMaxRound(M, r) : StronglyConsistentChain(C)}
+    {C \in Chains(M, r) : StronglyConsistentChain(C)}
         
 (*****************************************************************************)
 (* We can rank the chains by wheight, i.e. just their cardinality, or we can *)
@@ -101,7 +107,7 @@ DisjointChains(C1,C2) ==
 (*******************)
 AcceptedMessages(M,r) == {m \in M :
     /\  m.round = r-1
-    /\  LET CCs == MinimalStronglyConsistentChains(M,r-1) IN \* This looks promising!
+    /\  LET CCs == MaximalStronglyConsistentChains(M,r-1) IN \* This looks promising!
         /\  \E C \in CCs : m \in C
         /\  \A C1,C2 \in CCs :
                 /\  m \in C1
@@ -199,7 +205,6 @@ lb2:        await phase = "end";
     }
 }
 *)
-
 
 \* Invariant describing the type of the variables:
 TypeOK == 

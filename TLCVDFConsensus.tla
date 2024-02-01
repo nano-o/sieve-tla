@@ -56,165 +56,18 @@ AdvConstraint == \A m1,m2 \in messages :
     /\  m1.round = m2.round
     => m1 = m2
 
-\* Problematic sets of messages (p1 is the malicious node):
-
-\* \* defeats def using SCCs (empty coffer possible at round 3):
-\* M1 == {
-\*     [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-\*     [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>, <<p3, 1>>}],
-\*     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-\*     [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-\*     [round |-> 2, id |-> <<p1, 4>>, coffer |-> {<<p1, 3>>}],
-\*     [round |-> 2, id |-> <<p2, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}],
-\*     [round |-> 2, id |-> <<p3, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}]
-\* }
-
-\* \* ASSUME AcceptedMessages(M1, 3) = {}
-\* ASSUME StronglyConsistentChains(M1, 2) =
-\* {
-\*     {
-\*         [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}], 
-\*         [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}],
-\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-\*         [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>, <<p3, 1>>}],
-\*         [round |-> 2, id |-> <<p1, 4>>, coffer |-> {<<p1, 3>>}]
-\*     },
-\*     {
-\*         [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}], 
-\*         [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}], 
-\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
-\*         [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>, <<p3, 1>>}], 
-\*         [round |-> 2, id |-> <<p1, 4>>, coffer |-> {<<p1, 3>>}]
-\*     },
-\*     {
-\*         [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
-\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
-\*         [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>, <<p3, 1>>}], 
-\*         [round |-> 2, id |-> <<p1, 4>>, coffer |-> {<<p1, 3>>}]
-\*     },
-\*     {
-\*         [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}],
-\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
-\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
-\*         [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>, <<p3, 1>>}], 
-\*         [round |-> 2, id |-> <<p1, 4>>, coffer |-> {<<p1, 3>>}]
-\*     },
-\*     {
-\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
-\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
-\*         [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}], 
-\*         [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}], 
-\*         [round |-> 2, id |-> <<p2, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}]
-\*     }, 
-\*     {
-\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
-\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
-\*         [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}], 
-\*         [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}], 
-\*         [round |-> 2, id |-> <<p3, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}]
-\*     }, 
-\*     {
-\*         [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}], 
-\*         [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}], 
-\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
-\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
-\*         [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>, <<p3, 1>>}], 
-\*         [round |-> 2, id |-> <<p1, 4>>, coffer |-> {<<p1, 3>>}]},
-\*     {
-\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
-\*         [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}], 
-\*         [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}], 
-\*         [round |-> 2, id |-> <<p2, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}], 
-\*         [round |-> 2, id |-> <<p3, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}]
-\*     }
-\* }
-
-\* \* defeats def using CCs (empty coffer possible at round 3):
-\* M2 == {
-\*     [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-\*     [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
-\*     [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}],
-\*     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-\*     [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-\*     [round |-> 2, id |-> <<p1, 4>>, coffer |-> {<<p1, 3>>}],
-\*     [round |-> 2, id |-> <<p2, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}],
-\*     [round |-> 2, id |-> <<p3, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}]
-\* }
-
-\* Expr2 == AcceptedMessages(M2, 3)
-\* \* ASSUME Expr2 = {}
-
-\* \* defeats def using HSCCs (coffer {<<p1,3>>} possible at round 2):
-\* M3 == {
-\*     [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-\*     [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>, <<p3, 1>>}],
-\*     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-\*     [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
-\* }
-
-\* Expr3 == HeaviestStronglyConsistentChains(M3, 1)
-\* ASSUME Expr3 = {
-\*     {
-\*         [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-\*         [round |-> 0, id |-> <<p1, 2>>, coffer |-> {}],
-\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-\*         [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>, <<p1, 2>>, <<p2, 1>>, <<p3, 1>>}]
-\*     }
-\* }
-
-\* \* defeats def using HCCs (coffer {<<p1, 2>>, <<p1, 3>>, <<p2, 2>>, <<p3, 2>>} possible at round 2):
-\* M4 == {
-\*     [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-\*     [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
-\*     [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p2, 1>>}],
-\*     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-\*     [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
-\* }
-
-\* Expr4 == HeaviestConsistentChains(M4, 1)
-\* ASSUME Expr4 = {
-\*     {
-\*         [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-\*         [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
-\*         [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
-\*         [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}], 
-\*         [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p2, 1>>}], 
-\*         [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}], 
-\*         [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}]
-\*     }
-\* }
-
-\* \* violation (coffer {<<p3, 2>>, <<p5, 3>>} possible at round 2)
-\* \* took 50 minutes
-\* \* But expected since we had tWB=3 and tAdv=2 with p4 and p5 malicious...
-\* M5 == {
-\*     [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}], 
-\*     [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
-\*     [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
-\*     [round |-> 0, id |-> <<p4, 1>>, coffer |-> {}], 
-\*     [round |-> 0, id |-> <<p4, 2>>, coffer |-> {}], 
-\*     [round |-> 0, id |-> <<p5, 1>>, coffer |-> {}], 
-\*     [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], 
-\*     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], 
-\*     [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>, <<p4, 1>>}], 
-\*     [round |-> 1, id |-> <<p4, 3>>, coffer |-> {<<p4, 2>>}], 
-\*     [round |-> 1, id |-> <<p5, 2>>, coffer |-> {<<p4, 1>>, <<p5, 1>>}], 
-\*     [round |-> 1, id |-> <<p5, 3>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p4, 1>>, <<p4, 2>>}]
-\* }
-\* Expr5 == MinimalStronglyConsistentChains(M5, 1)
-\* \* ASSUME AcceptedMessages(M5, 2) = {[round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>, <<p4, 1>>}], [round |-> 1, id |-> <<p5, 3>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p4, 1>>, <<p4, 2>>}]} \* Takes forever...
+\* defeats MinSCCs (p4 and p5 malicious); coffer {<<p3,2>>} possible at round 2:
+M1 == {
+    [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+    [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}], 
+    [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}], 
+    [round |-> 0, id |-> <<p4, 1>>, coffer |-> {}], 
+    [round |-> 0, id |-> <<p5, 1>>, coffer |-> {}], 
+    [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], 
+    [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], 
+    [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>, <<p4, 1>>, <<p5, 1>>}],
+    [round |-> 1, id |-> <<p4, 2>>, coffer |-> {<<p4, 1>>}], 
+    [round |-> 1, id |-> <<p5, 2>>, coffer |-> {<<p5, 1>>}]
+}
 
 ==========================================================
