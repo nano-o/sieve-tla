@@ -13,8 +13,18 @@ Maximal(X, Leq(_,_)) ==
 
 MaximalElements(X, Leq(_,_)) ==
     {m \in X : \A x \in X : \neg (Leq(m,x) /\ \neg Leq(x,m))}
+MinimalElements(X, Leq(_,_)) ==
+    {m \in X : \A x \in X : \neg (Leq(x,m) /\ \neg Leq(m,x))}
+
+ASSUME MinimalElements({{1},{0,2},{0,2,3},{3}}, \subseteq) = {{0,2},{1},{3}}
 
 MaxInteger(I) == Max(I, <=)
 MaxCardinalitySets(S) == MaximalElements(S, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
+MinCardinalitySets(S) == MinimalElements(S, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
+MaximalSets(S) == MaximalElements(S, \subseteq)
+MinimalSets(S) == MinimalElements(S, \subseteq)
+
+
+ASSUME MinCardinalitySets({{1},{0,2},{0,2,3},{3}}) = {{1},{3}}
 
 ===========================================

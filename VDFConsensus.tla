@@ -77,10 +77,15 @@ ConsistentChains(M, r) ==
 \* The set of all strongly consistent chains that can be found in M:
 StronglyConsistentChains(M, r) ==
     {C \in SubsetsWithMaxRound(M, r) : StronglyConsistentChain(C)}
-
+        
+(*****************************************************************************)
+(* We can rank the chains by wheight, i.e. just their cardinality, or we can *)
+(* consider the maximal or minimal one in the subset order:                  *)
+(*****************************************************************************)
 HeaviestConsistentChains(M, r) == MaxCardinalitySets(ConsistentChains(M, r))
-
 HeaviestStronglyConsistentChains(M, r) == MaxCardinalitySets(StronglyConsistentChains(M, r))
+MinimalStronglyConsistentChains(M, r) == MinimalSets(StronglyConsistentChains(M, r))
+MaximalStronglyConsistentChains(M, r) == MaximalSets(StronglyConsistentChains(M, r))
 
 (*********************************************************************************)
 (* Two chains are disjoint when there is a round smaller than their max round in *)
@@ -96,7 +101,7 @@ DisjointChains(C1,C2) ==
 (*******************)
 AcceptedMessages(M,r) == {m \in M :
     /\  m.round = r-1
-    /\  LET CCs == StronglyConsistentChains(M,r-1) IN
+    /\  LET CCs == MinimalStronglyConsistentChains(M,r-1) IN \* This looks promising!
         /\  \E C \in CCs : m \in C
         /\  \A C1,C2 \in CCs :
                 /\  m \in C1
@@ -194,6 +199,7 @@ lb2:        await phase = "end";
     }
 }
 *)
+
 
 \* Invariant describing the type of the variables:
 TypeOK == 
