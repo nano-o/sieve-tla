@@ -10,6 +10,14 @@ EXTENDS Integers, FiniteSets, TLC
 \* tAdv == 1
 \* tWB == 1
 
+\* CONSTANTS
+\*     p1, p2, p3, p4, p5
+\* P == {p1,p2,p3,p4,p5}
+\* B == {p4,p5}
+\* \* in this case, 3/4 is only interesting if we can get to round 3 (otherwise there's no real adversarial advantage compared to 1/1)
+\* tAdv == 3
+\* tWB == 4
+
 CONSTANTS
     p1, p2, p3
 P == {p1,p2,p3}
@@ -75,29 +83,22 @@ AdvConstraint == \A m1,m2 \in messages :
 
 \* Examples
 
-\* M == {
-\*     [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p4, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p4, 2>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p5, 1>>, coffer |-> {}],
-\*     [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>, <<p4, 1>>, <<p5, 1>>}],
-\*     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>, <<p4, 1>>, <<p5, 1>>}],
-\*     [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}],
-\*     [round |-> 1, id |-> <<p5, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>}]
-\* }
-
-\* Expr == MaxConsistentSet(M, [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}])
-\* ASSUME Expr ={
-\*     [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-\*     [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-\*     [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>, <<p4, 1>>, <<p5, 1>>}],
-\*     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>, <<p4, 1>>, <<p5, 1>>}],
-\*     [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}]
-\* }
-
-
+M == {
+    [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+    [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+    [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+    [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
+    [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}],
+    [round |-> 1, id |-> <<p1, 4>>, coffer |-> {<<p1, 1>>}],
+    [round |-> 1, id |-> <<p1, 5>>, coffer |-> {<<p1, 1>>, <<p2, 1>>}],
+    [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+    [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+    [round |-> 2, id |-> <<p1, 6>>, coffer |-> {<<p1, 2>>, <<p1, 3>>, <<p1, 4>>, <<p1, 5>>}],
+    [round |-> 2, id |-> <<p2, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}],
+    [round |-> 2, id |-> <<p3, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}],
+    [round |-> 3, id |-> <<p2, 4>>, coffer |-> {<<p2, 3>>, <<p3, 3>>}],
+    [round |-> 3, id |-> <<p3, 4>>, coffer |-> {<<p2, 3>>, <<p3, 3>>}]
+}
+Expr == AcceptedMessages2(M)
 
 =========================================================

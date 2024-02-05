@@ -167,18 +167,14 @@ AcceptedMessages2(M) ==
 
 \* This only looks at r and r-1:
 ConsistentSets(M, r) ==
-    LET M1 == {m \in M : m.round = r-1}
-        M2 == {m \in M : m.round = r}
-        ConsistentPairs == {p \in ((SUBSET M1) \ {{}}) \times ((SUBSET M2) \ {{}}) :
-            /\  \A m2 \in p[2] :
-                /\  {m1.id : m1 \in p[1]} \subseteq m2.coffer
-                /\  2*Cardinality(p[1]) > Cardinality(m2.coffer)}
-    IN  {p[1] \cup p[2] : p \in ConsistentPairs} 
+    LET M0 == {m \in M : m.round = r-1}
+    IN  {S \cup StronglyConsistentSuccessors(S, M) : S \in SUBSET M0}
 
 MaxConsistentSet(M, m) ==
     LET r == m.round
         Cs == {C \in ConsistentSets(M,r) : m \in C}
     IN
+        \* Cs can be empty because M might not have m's coffer
         Max(Cs \cup {{}}, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 
 Valid2(M, m) ==
@@ -189,7 +185,7 @@ Valid2(M, m) ==
 
 RECURSIVE AcceptedMessages3Rec(_)
 AcceptedMessages3Rec(M) ==
-    IF MinRound(M) = MaxRound(M)
+    IF M = {} \/ MinRound(M) = MaxRound(M)
     THEN M
     ELSE LET V == {m \in M : m.round = MinRound(M)+1 /\ Valid2(M,m)} IN 
         AcceptedMessages3Rec(V \cup {m \in M : m.round > MinRound(M)+1})
@@ -294,8 +290,8 @@ lb2:        await phase = "end";
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "7186cf0a" /\ chksum(tla) = "9b79464f")
-\* Label tick of process clock at line 237 col 9 changed to tick_
+\* BEGIN TRANSLATION (chksum(pcal) = "7186cf0a" /\ chksum(tla) = "46236e62")
+\* Label tick of process clock at line 233 col 9 changed to tick_
 VARIABLES messages, tick, phase, donePhase, pendingMessage, messageCount, pc
 
 (* define statement *)
