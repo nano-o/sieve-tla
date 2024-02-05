@@ -27,30 +27,22 @@ MessageID == P\times Nat
 Message == [id : MessageID, round : Round, coffer : SUBSET MessageID]
 sender(m) == m.id[1]
 
-(**********************************************************************************)
-(* A strongly consistent chain is a subset of the messages in the DAG that        *)
-(* potentially has some dangling pointers (i.e. messages that have predecessors   *)
-(* not in the chain) and that satisfies the following recursive predicate:        *)
-(*                                                                                *)
-(*     * Any set of messages which all have a round of 0 is a strongly consistent *)
-(*     chain.                                                                     *)
-(*                                                                                *)
-(*     * A set of messages C with some non-zero rounds and maximal round r is a   *)
-(*     strongly consistent chain when, with Tip being the set of messages in the  *)
-(*     chain that have round r and Pred being the set of messages in the chain    *)
-(*     with round r-1, Pred is a strict majority of the set of predecessors of    *)
-(*     each message in Tip and C \ Tip is a consistent chain.                     *)
-(**********************************************************************************)
-
-\* The max round of a set of messages is the maximal round of its messages:
+\* The max round appearing in a set of messages:
 MaxRound(M) == MaxInteger({m.round : m \in M})
+MinRound(M) == MinInteger({m.round : m \in M})
 
-StronglyConsistentChain(M) ==
-    /\  M # {}
-    /\  \/  MaxRound(M) = 0
-        \/  \A r \in 1..MaxRound(M) :
-            LET Tip == { m \in M : m.round = r }
-                Pred == { m \in M : m.round = r-1 }
+(***********************************************************************************)
+(* A strongly consistent chain C is a subset of the DAG of messages such that, for *)
+(* each round r between 0 and the predecessor of the maximal round appearing in C, *)
+(* the subset Cr of the messages in C that have round r is a strict majority of    *)
+(* the coffer of each message in in C that has round r.                            *)
+(***********************************************************************************)
+StronglyConsistentChain(C) ==
+    /\  C # {}
+    /\  \/  MaxRound(C) = 0
+        \/  \A r \in 1..MaxRound(C) :
+            LET Tip == { m \in C : m.round = r }
+                Pred == { m \in C : m.round = r-1 }
             IN  /\  Tip # {}
                 /\  \A m \in Tip :
                     /\  {m2.id : m2 \in Pred} \subseteq m.coffer
@@ -68,6 +60,10 @@ ConsistentChain(M) ==
                     /\ {m2.id : m2 \in Maj} \subseteq m.coffer
                     /\  2*Cardinality(Maj) > Cardinality(m.coffer)
 
+(**********************************************************************************)
+(* The sets of messages with rounds at most r and containing at least one message *)
+(* from each round between 0 and r:                                               *)
+(**********************************************************************************)
 Chains(M,r) == {C \in SUBSET M :
     /\  \A m \in C : m.round <= r
     /\  \A r2 \in 0..r : \E m \in C : m.round = r2}
@@ -100,18 +96,112 @@ DisjointChains(C1,C2) ==
         IN  \/  2*Cardinality(I) < Cardinality(C1)
             \/  2*Cardinality(I) < Cardinality(C2)
 
+StronglyDisjointChains(C1,C2) ==
+    LET rmax == MaxRound(C1 \cup C2)
+    IN  \E r \in 0..(rmax-1) :
+        {m \in C1 : m.round = r} \cap {m \in C2 : m.round = r} = {}
+
 (*******************)
 (* Acceptance rule *)
 (*******************)
 AcceptedMessages(M,r) == {m \in M :
     /\  m.round = r-1
-    /\  LET CCs == MaximalStronglyConsistentChains(M,r-1) IN \* This looks promising!
+    /\  LET CCs == MaximalStronglyConsistentChains(M,r-1) IN
         /\  \E C \in CCs : m \in C
         /\  \A C1,C2 \in CCs :
                 /\  m \in C1
                 /\  m \notin C2
-                /\  DisjointChains(C1,C2)
+                /\  StronglyDisjointChains(C1,C2)
                 => Cardinality(C2) <= Cardinality(C1)}
+
+(*************************************************)
+(* Youer's acceptance rule.                      *)
+(*                                               *)
+(* Why not only consider immediate predecessors? *)
+(*************************************************)
+
+StronglyConsistentSuccessors(S, M) == {m \in M :
+    /\  {m2.id : m2 \in S} \subseteq m.coffer
+    /\  2*Cardinality(S) > Cardinality(m.coffer)}
+
+ConsistentSuccessors(S, M) == {m \in M : \E Maj \in SUBSET S :
+    /\  {m2.id : m2 \in Maj} \subseteq m.coffer
+    /\  2*Cardinality(Maj) > Cardinality(m.coffer)}
+    
+RECURSIVE ConsistentSetOfRec(_,_)
+ConsistentSetOfRec(S, M) ==
+    IF S = {} THEN {}
+    ELSE LET T == ConsistentSuccessors(S, M) IN \* TODO: Why not strongly?
+        S \cup ConsistentSetOfRec(T, M)
+
+ConsistentSetOf(S, M) ==
+    LET T == StronglyConsistentSuccessors(S, M)
+    IN S \cup ConsistentSetOfRec(T, M)
+
+MaxRootOf(M, m) ==
+    LET MM == {m2 \in M : m2.round = MinRound(M)}
+        CSs == [S \in SUBSET MM |-> IF m \in ConsistentSetOf(S, M) THEN ConsistentSetOf(S, M) ELSE {}]
+    IN CHOOSE S \in DOMAIN CSs : \A S2 \in DOMAIN CSs : 
+        Cardinality(CSs[S2]) <= Cardinality(CSs[S])
+
+Valid(M, m) == LET MM == {m2 \in M : m2.round = MinRound(M)} IN
+    \A S \in (SUBSET MM) \ {{}}:
+        S \cap MaxRootOf(M,m) = {} =>
+            LET C1 == ConsistentSetOf(MaxRootOf(M,m), M)
+                C2 == ConsistentSetOf(S, M)
+            IN  m \notin C2 => Cardinality(C2) <= Cardinality(C1)
+
+RECURSIVE AcceptedMessages2Rec(_)
+AcceptedMessages2Rec(M) ==
+    IF MinRound(M) = MaxRound(M)
+    THEN M
+    ELSE LET V == {m \in M : Valid(M,m)} IN 
+        AcceptedMessages2Rec({m \in V : m.round > MinRound(M)})
+
+AcceptedMessages2(M) == 
+    IF M = {}
+    THEN {}
+    ELSE AcceptedMessages2Rec(M)
+
+\* Another try:
+
+\* This only looks at r and r-1:
+ConsistentSets(M, r) ==
+    LET M1 == {m \in M : m.round = r-1}
+        M2 == {m \in M : m.round = r}
+        ConsistentPairs == {p \in ((SUBSET M1) \ {{}}) \times ((SUBSET M2) \ {{}}) :
+            /\  \A m2 \in p[2] :
+                /\  {m1.id : m1 \in p[1]} \subseteq m2.coffer
+                /\  2*Cardinality(p[1]) > Cardinality(m2.coffer)}
+    IN  {p[1] \cup p[2] : p \in ConsistentPairs} 
+
+MaxConsistentSet(M, m) ==
+    LET r == m.round
+        Cs == {C \in ConsistentSets(M,r) : m \in C}
+    IN
+        Max(Cs \cup {{}}, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
+
+Valid2(M, m) ==
+    LET r == m.round
+        C == MaxConsistentSet(M, m)
+    IN  \A C2 \in ConsistentSets(M,r) :
+            m \notin C2 /\ C \cap C2 = {} => Cardinality(C2) <= Cardinality(C)
+
+RECURSIVE AcceptedMessages3Rec(_)
+AcceptedMessages3Rec(M) ==
+    IF MinRound(M) = MaxRound(M)
+    THEN M
+    ELSE LET V == {m \in M : m.round = MinRound(M)+1 /\ Valid2(M,m)} IN 
+        AcceptedMessages3Rec(V \cup {m \in M : m.round > MinRound(M)+1})
+
+AcceptedMessages3(M) == 
+    IF M = {}
+    THEN {}
+    ELSE AcceptedMessages3Rec(M)
+
+(********************************)
+(* The DAG is acyclic and closed *)
+(********************************)
 
 \* M does not have dangling edges:
 Closed(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
@@ -137,7 +227,7 @@ Closed(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
             LET msgs == {m \in messages : m.round < currentRound} IN
             {M \in SUBSET msgs :
                 \* don't use a set of messages that has dangling edges (messages in coffers that are missing):
-                /\  Closed(M)
+                /\  Closed(M) \* TODO: is this important?
                 /\  wellBehavedMessages \subseteq  M}
     }
     macro sendMessage(m) {
@@ -161,7 +251,7 @@ l1:     while (TRUE) {
             if (tick % tWB = 0) {
                 \* Start the VDF computation for the next message:
                 with (msgs \in receivedMsgsSets)
-                with (predMsgs = AcceptedMessages(msgs, currentRound)) {
+                with (predMsgs = AcceptedMessages3(msgs)) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
                         round |-> currentRound,
@@ -204,6 +294,117 @@ lb2:        await phase = "end";
     }
 }
 *)
+\* BEGIN TRANSLATION (chksum(pcal) = "7186cf0a" /\ chksum(tla) = "9b79464f")
+\* Label tick of process clock at line 237 col 9 changed to tick_
+VARIABLES messages, tick, phase, donePhase, pendingMessage, messageCount, pc
+
+(* define statement *)
+currentRound == tick \div tWB
+wellBehavedMessages == {m \in messages : sender(m) \in P \ B}
+
+receivedMsgsSets ==
+
+    LET msgs == {m \in messages : m.round < currentRound} IN
+    {M \in SUBSET msgs :
+
+        /\  Closed(M)
+        /\  wellBehavedMessages \subseteq  M}
+
+
+vars == << messages, tick, phase, donePhase, pendingMessage, messageCount, pc
+        >>
+
+ProcSet == ({"clock"}) \cup (P \ B) \cup (B)
+
+Init == (* Global variables *)
+        /\ messages = {}
+        /\ tick = 0
+        /\ phase = "start"
+        /\ donePhase = [p \in P |-> "end"]
+        /\ pendingMessage = [p \in P |-> <<>>]
+        /\ messageCount = [p \in P |-> 0]
+        /\ pc = [self \in ProcSet |-> CASE self \in {"clock"} -> "tick_"
+                                        [] self \in P \ B -> "l1"
+                                        [] self \in B -> "lb1"]
+
+tick_(self) == /\ pc[self] = "tick_"
+               /\ \A p \in P : donePhase[p] = phase
+               /\ IF phase = "start"
+                     THEN /\ phase' = "end"
+                          /\ tick' = tick
+                     ELSE /\ phase' = "start"
+                          /\ tick' = tick+1
+               /\ pc' = [pc EXCEPT ![self] = "tick_"]
+               /\ UNCHANGED << messages, donePhase, pendingMessage, 
+                               messageCount >>
+
+clock(self) == tick_(self)
+
+l1(self) == /\ pc[self] = "l1"
+            /\ phase = "start"
+            /\ IF tick % tWB = 0
+                  THEN /\ \E msgs \in receivedMsgsSets:
+                            LET predMsgs == AcceptedMessages3(msgs) IN
+                              /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
+                                                                                    id |-> <<self,messageCount[self]+1>>,
+                                                                                    round |-> currentRound,
+                                                                                    coffer |-> {m.id : m \in predMsgs}]]
+                              /\ messageCount' = [messageCount EXCEPT ![self] = messageCount[self]+1]
+                  ELSE /\ TRUE
+                       /\ UNCHANGED << pendingMessage, messageCount >>
+            /\ donePhase' = [donePhase EXCEPT ![self] = "start"]
+            /\ pc' = [pc EXCEPT ![self] = "l2"]
+            /\ UNCHANGED << messages, tick, phase >>
+
+l2(self) == /\ pc[self] = "l2"
+            /\ phase = "end"
+            /\ IF tick % tWB = tWB - 1
+                  THEN /\ messages' = (messages \cup {(pendingMessage[self])})
+                  ELSE /\ TRUE
+                       /\ UNCHANGED messages
+            /\ donePhase' = [donePhase EXCEPT ![self] = "end"]
+            /\ pc' = [pc EXCEPT ![self] = "l1"]
+            /\ UNCHANGED << tick, phase, pendingMessage, messageCount >>
+
+proc(self) == l1(self) \/ l2(self)
+
+lb1(self) == /\ pc[self] = "lb1"
+             /\ phase = "start"
+             /\ IF tick % tAdv = 0
+                   THEN /\ LET maxRound == Max({m.round : m \in messages} \cup {0}, <=) IN
+                             \E rnd \in {maxRound, maxRound+1}:
+                               \E predMsgs \in SUBSET {m \in messages : m.round = rnd-1}:
+                                 /\ rnd > 0 => predMsgs # {}
+                                 /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
+                                                                                       id |-> <<self,messageCount[self]+1>>,
+                                                                                       round |-> rnd,
+                                                                                       coffer |-> {m.id : m \in predMsgs}]]
+                                 /\ messageCount' = [messageCount EXCEPT ![self] = messageCount[self]+1]
+                   ELSE /\ TRUE
+                        /\ UNCHANGED << pendingMessage, messageCount >>
+             /\ donePhase' = [donePhase EXCEPT ![self] = "start"]
+             /\ pc' = [pc EXCEPT ![self] = "lb2"]
+             /\ UNCHANGED << messages, tick, phase >>
+
+lb2(self) == /\ pc[self] = "lb2"
+             /\ phase = "end"
+             /\ IF tick % tAdv = tAdv - 1
+                   THEN /\ messages' = (messages \cup {(pendingMessage[self])})
+                   ELSE /\ TRUE
+                        /\ UNCHANGED messages
+             /\ donePhase' = [donePhase EXCEPT ![self] = "end"]
+             /\ pc' = [pc EXCEPT ![self] = "lb1"]
+             /\ UNCHANGED << tick, phase, pendingMessage, messageCount >>
+
+byz(self) == lb1(self) \/ lb2(self)
+
+Next == (\E self \in {"clock"}: clock(self))
+           \/ (\E self \in P \ B: proc(self))
+           \/ (\E self \in B: byz(self))
+
+Spec == Init /\ [][Next]_vars
+
+\* END TRANSLATION 
 
 \* Invariant describing the type of the variables:
 TypeOK == 
@@ -232,7 +433,7 @@ Safety == \A p \in P \ B : LET m == pendingMessage[p] IN
 messageWithID(id) == CHOOSE m \in messages : m.id = id
 
 \* Basic well-formedness properties:    
-Inv1 == \A m \in messages : 
+Inv1 == \A m \in messages \cup ({pendingMessage[p] : p \in P} \ {<<>>}): 
     /\  \A m2 \in messages : m # m2 => m.id # m2.id
     /\  \A id \in m.coffer :
         /\  \E m2 \in messages : m2.id = id

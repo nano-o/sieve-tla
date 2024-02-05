@@ -19,6 +19,7 @@ MinimalElements(X, Leq(_,_)) ==
 ASSUME MinimalElements({{1},{0,2},{0,2,3},{3}}, \subseteq) = {{0,2},{1},{3}}
 
 MaxInteger(I) == Max(I, <=)
+MinInteger(I) == Max(I, >=)
 MaxCardinalitySets(S) == MaximalElements(S, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 MinCardinalitySets(S) == MinimalElements(S, LAMBDA C1,C2 : Cardinality(C1) <= Cardinality(C2))
 MaximalSets(S) == MaximalElements(S, \subseteq)
