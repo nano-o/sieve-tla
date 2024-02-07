@@ -83,22 +83,22 @@ AdvConstraint == \A m1,m2 \in messages :
 
 \* Examples
 
-M == {
-    [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
-    [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
-    [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
-    [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
-    [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}],
-    [round |-> 1, id |-> <<p1, 4>>, coffer |-> {<<p1, 1>>}],
-    [round |-> 1, id |-> <<p1, 5>>, coffer |-> {<<p1, 1>>, <<p2, 1>>}],
-    [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-    [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
-    [round |-> 2, id |-> <<p1, 6>>, coffer |-> {<<p1, 2>>, <<p1, 3>>, <<p1, 4>>, <<p1, 5>>}],
-    [round |-> 2, id |-> <<p2, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}],
-    [round |-> 2, id |-> <<p3, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}],
-    [round |-> 3, id |-> <<p2, 4>>, coffer |-> {<<p2, 3>>, <<p3, 3>>}],
-    [round |-> 3, id |-> <<p3, 4>>, coffer |-> {<<p2, 3>>, <<p3, 3>>}]
-}
-Expr == AcceptedMessages2(M)
+\* M == {
+\*     [round |-> 0, id |-> <<p1, 1>>, coffer |-> {}],
+\*     [round |-> 0, id |-> <<p2, 1>>, coffer |-> {}],
+\*     [round |-> 0, id |-> <<p3, 1>>, coffer |-> {}],
+\*     [round |-> 1, id |-> <<p1, 2>>, coffer |-> {<<p1, 1>>}],
+\*     [round |-> 1, id |-> <<p1, 3>>, coffer |-> {<<p1, 1>>}],
+\*     [round |-> 1, id |-> <<p1, 4>>, coffer |-> {<<p1, 1>>}],
+\*     [round |-> 1, id |-> <<p1, 5>>, coffer |-> {<<p1, 1>>, <<p2, 1>>}],
+\*     [round |-> 1, id |-> <<p2, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+\*     [round |-> 1, id |-> <<p3, 2>>, coffer |-> {<<p2, 1>>, <<p3, 1>>}],
+\*     [round |-> 2, id |-> <<p1, 6>>, coffer |-> {<<p1, 2>>, <<p1, 3>>, <<p1, 4>>, <<p1, 5>>}],
+\*     [round |-> 2, id |-> <<p2, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}],
+\*     [round |-> 2, id |-> <<p3, 3>>, coffer |-> {<<p2, 2>>, <<p3, 2>>}],
+\*     [round |-> 3, id |-> <<p2, 4>>, coffer |-> {<<p2, 3>>, <<p3, 3>>}],
+\*     [round |-> 3, id |-> <<p3, 4>>, coffer |-> {<<p2, 3>>, <<p3, 3>>}]
+\* }
+\* Expr == AcceptedMessages2(M)
 
 =========================================================

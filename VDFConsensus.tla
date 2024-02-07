@@ -114,11 +114,9 @@ AcceptedMessages(M,r) == {m \in M :
                 /\  StronglyDisjointChains(C1,C2)
                 => Cardinality(C2) <= Cardinality(C1)}
 
-(*************************************************)
-(* Youer's acceptance rule.                      *)
-(*                                               *)
-(* Why not only consider immediate predecessors? *)
-(*************************************************)
+(****************************)
+(* Youer's acceptance rule. *)
+(****************************)
 
 StronglyConsistentSuccessors(S, M) == {m \in M :
     /\  {m2.id : m2 \in S} \subseteq m.coffer
@@ -247,7 +245,7 @@ l1:     while (TRUE) {
             if (tick % tWB = 0) {
                 \* Start the VDF computation for the next message:
                 with (msgs \in receivedMsgsSets)
-                with (predMsgs = AcceptedMessages3(msgs)) {
+                with (predMsgs = AcceptedMessages2(msgs)) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
                         round |-> currentRound,
@@ -290,8 +288,8 @@ lb2:        await phase = "end";
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "7186cf0a" /\ chksum(tla) = "46236e62")
-\* Label tick of process clock at line 233 col 9 changed to tick_
+\* BEGIN TRANSLATION (chksum(pcal) = "f12bbc99" /\ chksum(tla) = "33306de7")
+\* Label tick of process clock at line 231 col 9 changed to tick_
 VARIABLES messages, tick, phase, donePhase, pendingMessage, messageCount, pc
 
 (* define statement *)
@@ -340,7 +338,7 @@ l1(self) == /\ pc[self] = "l1"
             /\ phase = "start"
             /\ IF tick % tWB = 0
                   THEN /\ \E msgs \in receivedMsgsSets:
-                            LET predMsgs == AcceptedMessages3(msgs) IN
+                            LET predMsgs == AcceptedMessages2(msgs) IN
                               /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
                                                                                     id |-> <<self,messageCount[self]+1>>,
                                                                                     round |-> currentRound,
