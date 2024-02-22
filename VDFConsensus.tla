@@ -118,14 +118,21 @@ AcceptedMessages(M,r) == {m \in M :
 (* Youer's acceptance rule. *)
 (****************************)
 
-StronglyConsistentSuccessors(S, M) == {m \in M :
-    /\  {m2.id : m2 \in S} \subseteq m.coffer
-    /\  2*Cardinality(S) > Cardinality(m.coffer)}
+ConsistentSuccessor(S, m) == 
+    LET I == {m2.id : m2 \in S} \cap m.coffer
+    IN  2*Cardinality(I) > Cardinality(m.coffer)
 
-ConsistentSuccessors(S, M) == {m \in M : \E Maj \in SUBSET S :
-    /\  {m2.id : m2 \in Maj} \subseteq m.coffer
-    /\  2*Cardinality(Maj) > Cardinality(m.coffer)}
-    
+StronglyConsistentSuccessor(S, m) ==
+    /\  \A m2 \in S : m2.id \in m.coffer
+    /\  ConsistentSuccessor(S,m)
+
+ConsistentSet(S, C, M) == LET r == MinRound(S) IN
+    /\  C \subseteq M
+    /\  {m \in C : m.round = r} = S
+    /\  \A m \in C : m.round = r+1 => ConsistentSuccessor(S, m)
+    /\  \A r2 \in r..MaxRound(M) :
+        
+
 RECURSIVE ConsistentSetOfRec(_,_)
 ConsistentSetOfRec(S, M) ==
     IF S = {} THEN {}
