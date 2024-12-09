@@ -2,6 +2,8 @@
 
 EXTENDS Integers, FiniteSets
 
+PickFrom(S) == CHOOSE x \in S : TRUE
+
 \* The intersection of a set of sets:
 Intersection(Ss) == {x \in UNION Ss : \A S \in Ss : x \in S}
 
