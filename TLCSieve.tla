@@ -43,7 +43,7 @@ ASSUME BootstrapSieve({m1,m2,m3,m4}) = {m4}
 Sym == Permutations(P \ B) \* \cup Permutations(B)
 
 \* Constraints to steer or stop the model-checker:
-MaxTick == 8
+MaxTick == 10
 TickConstraint == tick <= MaxTick
 
 \* Debugging canaries:
@@ -55,10 +55,5 @@ Canary1 == \neg (
 Canary2 == \neg (
     tick = 6 /\ \E m \in messages : sender(m) = p1 /\ m.step = 2
 )
-
-M == {[id |-> <<p1, 1>>, step |-> 0, coffer |-> {}], [id |-> <<p1, 2>>, step |-> 1, coffer |-> {<<p1, 1>>}], [id |-> <<p1, 3>>, step |-> 1, coffer |-> {<<p2, 1>>}], [id |-> <<p2, 1>>, step |-> 0, coffer |-> {}], [id |-> <<p2, 2>>, step |-> 1, coffer |-> {<<p1, 1>>, <<p2, 1>>, <<p3, 1>>}], [id |-> <<p3, 1>>, step |-> 0, coffer |-> {}], [id |-> <<p3, 2>>, step |-> 1, coffer |-> {<<p2, 1>>, <<p3, 1>>}]}
-ASSUME PrintT(BootstrapSieve(M))
-
-
 
 =============================================================================

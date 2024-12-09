@@ -40,6 +40,7 @@ Message == [id : MessageID, step: Step, coffer : SUBSET MessageID]
 sender(m) == m.id[1]
 Ids(M) == {m.id : m \in M}
 FilterStep(M, s) == {m \in M : m.step = s}
+IsGraph(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
 
 (****************************)
 (* Now on to BootstrapSieve *)
@@ -62,7 +63,9 @@ BootstrapSieveRec(M, s) ==  IF M = {} THEN M ELSE
     LET maxStep == MaxInteger({m.step : m \in M})
     IN  IF s > maxStep THEN M
         ELSE
-            LET consistentDAGs == {D \in SUBSET M : ConsistentDAG(D)}
+            LET consistentDAGs == {D \in SUBSET M :
+                    /\  ConsistentDAG(D)
+                    /\  \E m \in D : m.step = s-1}
                 M2 == {m \in M :
                     \/  m.step > s
                     \/  /\  m.step = s
@@ -72,8 +75,6 @@ BootstrapSieveRec(M, s) ==  IF M = {} THEN M ELSE
             IN  BootstrapSieveRec(M2, s+1)
 
 BootstrapSieve(M) == BootstrapSieveRec(M, 1)
-
-IsGraph(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
 
 (*--algorithm Algo {
     variables
@@ -155,8 +156,8 @@ lb2:        await phase = "end";
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "f77d9056" /\ chksum(tla) = "4fac4ad5")
-\* Label tick of process clock at line 99 col 9 changed to tick_
+\* BEGIN TRANSLATION (chksum(pcal) = "f77d9056" /\ chksum(tla) = "9a13911a")
+\* Label tick of process clock at line 100 col 9 changed to tick_
 VARIABLES pc, messages, tick, phase, donePhase, pendingMessage, messageCount
 
 (* define statement *)
