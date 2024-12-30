@@ -42,6 +42,18 @@ Ids(M) == {m.id : m \in M}
 FilterStep(M, s) == {m \in M : m.step = s}
 IsGraph(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
 
+(**************************************************************************)
+(* If M is a message DAG, Height(m, M) is the height of message m in DAG. *)
+(**************************************************************************)
+RECURSIVE Height(_,_)
+Height(m, M) == IF m.coffer = {} THEN 0 ELSE
+    1 + MaxInteger({Height(M, m2) : m2 \in {m2 \in M : m2.id \in m.coffer}})
+
+(********************************************************************************)
+(* A message is a valid step-s message if its height in the message graph is s. *)
+(********************************************************************************)
+ValidMessage(m, M) == m.step = Height(m, M)
+
 (****************************)
 (* Now on to BootstrapSieve *)
 (****************************)
@@ -59,24 +71,28 @@ ConsistentDAG(M) == IF M = {} THEN TRUE ELSE
             /\  ConsistentDAG(M \ tip)
 
 RECURSIVE BootstrapSieveRec(_, _)
-BootstrapSieveRec(M, s) ==  IF M = {} THEN M ELSE
-    LET maxStep == MaxInteger({m.step : m \in M})
-    IN  IF s > maxStep THEN M
-        ELSE
-            LET consistentDAGs == {D \in SUBSET M :
-                    /\  ConsistentDAG(D)
-                    /\  \E m \in D : m.step = s-1}
-                M2 == {m \in M :
-                    \/  m.step > s
-                    \/  /\  m.step = s
-                        /\  \E D \in consistentDAGs : m \in D
-                        /\  LET CA == PickFrom(MaxCardinalitySets({D \in consistentDAGs : m \in D})) IN
-                            \A CB \in consistentDAGs : CA \cap CB = {} => Cardinality(CB) < Cardinality(CA)}
-            IN  BootstrapSieveRec(M2, s+1)
-
 BootstrapSieve(M) == BootstrapSieveRec(M, 1)
+FilterAntique(M, s) == 
+    LET consistentDAGs == 
+            {D \in SUBSET M : ConsistentDAG(D) /\ \E m \in D : m.step = s-1}
+    IN  {m \in M :
+            \/  m.step > s
+            \/  /\  m.step = s
+                /\  \E D \in consistentDAGs : m \in D
+                /\  LET CA == PickFrom(MaxCardinalitySets({D \in consistentDAGs : m \in D}))
+                    IN  \A CB \in consistentDAGs :
+                            CA \cap CB = {} => Cardinality(CB) < Cardinality(CA)}
+BootstrapSieveRec(M, s) == 
+    IF M = {}
+    THEN M
+    ELSE
+        LET maxStep == MaxInteger({m.step : m \in M})
+        IN  IF s > maxStep
+            THEN M
+            ELSE BootstrapSieveRec(FilterAntique(M,s), s+1)
 
-(*--algorithm Algo {
+
+(*--algorithm BootstrapSieve {
     variables
         messages = {};
         tick = 0;
@@ -85,13 +101,13 @@ BootstrapSieve(M) == BootstrapSieveRec(M, 1)
         pendingMessage = [p \in P |-> <<>>]; \* message we're computing the VDF on
         messageCount = [p \in P |-> 0]; \* used to generate unique message IDs
     define {
-        currentStep == tick \div tWB
-        wellBehavedMessages == {m \in messages : sender(m) \in P \ B}
+        step == tick \div tWB
+        correctMessages == {m \in messages : sender(m) \in P \ B}
         \* possible sets of messages received by a well-behaved process:
         receivedMsgsSets ==
             \* ignore messages tagged for future steps:
-            LET msgs == {m \in messages : m.step < currentStep}
-            IN {M \in SUBSET msgs : IsGraph(M) /\ wellBehavedMessages \subseteq  M}
+            LET msgs == {m \in messages : m.step < step}
+            IN {M \in SUBSET msgs : IsGraph(M) /\ correctMessages \subseteq  M}
     }
     macro sendMessage(m) {
         messages := messages \cup {m}
@@ -117,7 +133,7 @@ l1:     while (TRUE) {
                 with (predMsgs = BootstrapSieve(msgs)) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
-                        step |-> currentStep,
+                        step |-> step,
                         coffer |-> Ids(predMsgs)];
                     messageCount[self] := messageCount[self]+1
                 }
@@ -125,7 +141,7 @@ l1:     while (TRUE) {
             donePhase[self] := "start";
 l2:         await phase = "end";
             if (tick % tWB = tWB - 1)
-                \* it's the end of the tWB period, the VDF has been computed
+                \* it's the end of the step, the VDF has been computed
                 sendMessage(pendingMessage[self]);
             donePhase[self] := "end";
         }
@@ -156,18 +172,18 @@ lb2:        await phase = "end";
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "f77d9056" /\ chksum(tla) = "9a13911a")
-\* Label tick of process clock at line 100 col 9 changed to tick_
+\* BEGIN TRANSLATION (chksum(pcal) = "6324a1e8" /\ chksum(tla) = "782bc5d3")
+\* Label tick of process clock at line 115 col 9 changed to tick_
 VARIABLES pc, messages, tick, phase, donePhase, pendingMessage, messageCount
 
 (* define statement *)
-currentStep == tick \div tWB
-wellBehavedMessages == {m \in messages : sender(m) \in P \ B}
+step == tick \div tWB
+correctMessages == {m \in messages : sender(m) \in P \ B}
 
 receivedMsgsSets ==
 
-    LET msgs == {m \in messages : m.step < currentStep}
-    IN {M \in SUBSET msgs : IsGraph(M) /\ wellBehavedMessages \subseteq  M}
+    LET msgs == {m \in messages : m.step < step}
+    IN {M \in SUBSET msgs : IsGraph(M) /\ correctMessages \subseteq  M}
 
 
 vars == << pc, messages, tick, phase, donePhase, pendingMessage, messageCount
@@ -206,7 +222,7 @@ l1(self) == /\ pc[self] = "l1"
                             LET predMsgs == BootstrapSieve(msgs) IN
                               /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
                                                                                     id |-> <<self,messageCount[self]+1>>,
-                                                                                    step |-> currentStep,
+                                                                                    step |-> step,
                                                                                     coffer |-> Ids(predMsgs)]]
                               /\ messageCount' = [messageCount EXCEPT ![self] = messageCount[self]+1]
                   ELSE /\ TRUE
@@ -284,8 +300,8 @@ Safety == \A p \in P \ B : LET m == pendingMessage[p] IN
     /\  m # <<>>
     /\  m.step > 0
     =>
-    /\  \A m2 \in wellBehavedMessages : m2.step = m.step-1 => m2.id \in m.coffer
-    /\  LET M == {m2 \in wellBehavedMessages : m2.step = m.step-1}
+    /\  \A m2 \in correctMessages : m2.step = m.step-1 => m2.id \in m.coffer
+    /\  LET M == {m2 \in correctMessages : m2.step = m.step-1}
         IN  ConsistentSuccessor(M, m)
 
 

@@ -17,6 +17,7 @@ EXTENDS Integers, FiniteSets, TLC
 \* tAdv == 3
 \* tWB == 4
 
+\* Checking safety of the following with maxTick = 10 took 6 hours
 CONSTANTS
     p1, p2, p3
 P == {p1,p2,p3}
