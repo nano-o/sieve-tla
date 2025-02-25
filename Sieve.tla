@@ -41,18 +41,24 @@ sender(m) == m.id[1]
 Ids(M) == {m.id : m \in M}
 FilterStep(M, s) == {m \in M : m.step = s}
 IsGraph(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
+PickFrom(S) == CHOOSE x \in S : TRUE \* pick an arbitrary element from a set
 
 (**************************************************************************)
 (* If M is a message DAG, Height(m, M) is the height of message m in DAG. *)
 (**************************************************************************)
 RECURSIVE Height(_,_)
 Height(m, M) == IF m.coffer = {} THEN 0 ELSE
-    1 + MaxInteger({Height(M, m2) : m2 \in {m2 \in M : m2.id \in m.coffer}})
+    LET cofferMsgs == {m2 \in M : m2.id \in m.coffer} IN
+        1 + MaxInteger({Height(m2, M) : m2 \in cofferMsgs})
 
-(********************************************************************************)
-(* A message is a valid step-s message if its height in the message graph is s. *)
-(********************************************************************************)
-ValidMessage(m, M) == m.step = Height(m, M)
+RECURSIVE RecursiveMatryoska(_, _)
+RecursiveMatryoska(m, M) ==
+    IF m.coffer = {} /\ m.step = 0
+    THEN TRUE
+    ELSE LET cofferMsgs == {m2 \in M : m2.id \in m.coffer} IN
+        \A m2 \in cofferMsgs :
+        /\  m2.step = m.step-1
+        /\  RecursiveMatryoska(m2, M)
 
 (****************************)
 (* Now on to BootstrapSieve *)
@@ -64,24 +70,27 @@ ConsistentSuccessor(M, m) ==
 RECURSIVE ConsistentDAG(_)
 ConsistentDAG(M) == IF M = {} THEN TRUE ELSE
     LET maxStep == MaxInteger({m.step : m \in M})
-        tip == FilterStep(M, maxStep)
-    IN  IF \A m \in M : m.step = maxStep THEN TRUE
-        ELSE LET prevTip == FilterStep(M, maxStep-1) IN
-            /\  \A m \in tip : ConsistentSuccessor(prevTip, m)
-            /\  ConsistentDAG(M \ tip)
+    IN  IF \A m \in M : m.step = maxStep
+        THEN TRUE
+        ELSE
+            LET tip == FilterStep(M, maxStep)
+                prevTip == FilterStep(M, maxStep-1)
+            IN  /\  \A m \in tip : ConsistentSuccessor(prevTip, m)
+                /\  ConsistentDAG(M \ tip)
 
 RECURSIVE BootstrapSieveRec(_, _)
 BootstrapSieve(M) == BootstrapSieveRec(M, 1)
-FilterAntique(M, s) == 
+FilterAntique(M, s) == \* assumes all messages in M have a step number >= s-1
     LET consistentDAGs == 
             {D \in SUBSET M : ConsistentDAG(D) /\ \E m \in D : m.step = s-1}
-    IN  {m \in M :
-            \/  m.step > s
-            \/  /\  m.step = s
-                /\  \E D \in consistentDAGs : m \in D
-                /\  LET CA == PickFrom(MaxCardinalitySets({D \in consistentDAGs : m \in D}))
-                    IN  \A CB \in consistentDAGs :
-                            CA \cap CB = {} => Cardinality(CB) < Cardinality(CA)}
+    IN  {m \in M : \* messages we keep (i.e. not antique and step >= s)
+        \/  m.step > s
+        \/  /\  m.step = s \* could we use m.step >= s instead?
+            /\  \E D \in consistentDAGs : m \in D
+            /\  LET CA == PickFrom( \* pick a max-cardinality consistent DAG containing m
+                        MaxCardinalitySets({D \in consistentDAGs : m \in D}))
+                IN  \A CB \in consistentDAGs : \* all disjoint consistent DAGs are of lower cardinality
+                        CA \cap CB = {} => Cardinality(CB) < Cardinality(CA)}
 BootstrapSieveRec(M, s) == 
     IF M = {}
     THEN M
@@ -104,9 +113,8 @@ BootstrapSieveRec(M, s) ==
         step == tick \div tWB
         correctMessages == {m \in messages : sender(m) \in P \ B}
         \* possible sets of messages received by a well-behaved process:
-        receivedMsgsSets ==
-            \* ignore messages tagged for future steps:
-            LET msgs == {m \in messages : m.step < step}
+        recursiveMatryoskaMsgs ==
+            LET msgs == {m \in messages : m.step < step /\ RecursiveMatryoska(m, messages)}
             IN {M \in SUBSET msgs : IsGraph(M) /\ correctMessages \subseteq  M}
     }
     macro sendMessage(m) {
@@ -129,7 +137,7 @@ l1:     while (TRUE) {
             await phase = "start";
             if (tick % tWB = 0) {
                 \* Start the VDF computation for the next message:
-                with (msgs \in receivedMsgsSets)
+                with (msgs \in recursiveMatryoskaMsgs)
                 with (predMsgs = BootstrapSieve(msgs)) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
@@ -172,17 +180,16 @@ lb2:        await phase = "end";
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "6324a1e8" /\ chksum(tla) = "782bc5d3")
-\* Label tick of process clock at line 115 col 9 changed to tick_
+\* BEGIN TRANSLATION (chksum(pcal) = "4aaf2129" /\ chksum(tla) = "a5a57505")
+\* Label tick of process clock at line 124 col 9 changed to tick_
 VARIABLES pc, messages, tick, phase, donePhase, pendingMessage, messageCount
 
 (* define statement *)
 step == tick \div tWB
 correctMessages == {m \in messages : sender(m) \in P \ B}
 
-receivedMsgsSets ==
-
-    LET msgs == {m \in messages : m.step < step}
+recursiveMatryoskaMsgs ==
+    LET msgs == {m \in messages : m.step < step /\ RecursiveMatryoska(m, messages)}
     IN {M \in SUBSET msgs : IsGraph(M) /\ correctMessages \subseteq  M}
 
 
@@ -218,7 +225,7 @@ clock(self) == tick_(self)
 l1(self) == /\ pc[self] = "l1"
             /\ phase = "start"
             /\ IF tick % tWB = 0
-                  THEN /\ \E msgs \in receivedMsgsSets:
+                  THEN /\ \E msgs \in recursiveMatryoskaMsgs:
                             LET predMsgs == BootstrapSieve(msgs) IN
                               /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
                                                                                     id |-> <<self,messageCount[self]+1>>,
