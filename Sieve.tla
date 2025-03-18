@@ -12,7 +12,7 @@ ASSUME B \subseteq P \* malicious processes are a subset of all processes
 W == P \ B \* the set of well-behaved processes
 
 Tick == Nat \* a tick is a real-time clock tick
-Step == Nat \* step number
+Step == Nat \* a step consists of a fixed number of ticks
 
 (***********************************************************************************)
 (* The message-production rate of well-behaved processes is of 1 message per tWB   *)
@@ -24,33 +24,33 @@ Step == Nat \* step number
 (***********************************************************************************)
 ASSUME Cardinality(W)*tAdv > Cardinality(B)*tWB
 
-SuperMajority(S1, S2) ==
-    /\  S1 \subseteq S2
-    /\  2*Cardinality(S1) > Cardinality(S2)
-
 (********************************************************************************)
 (* A message identifier consists of a process identifier and a sequence number. *)
 (********************************************************************************)
 MessageID == P\times Nat
 
-(********************************************************************************************)
-(* A message consists of an identifier, a step number, and a coffer of message identifiers. *)
-(********************************************************************************************)
-Message == [id : MessageID, step: Step, coffer : SUBSET MessageID]
-sender(m) == m.id[1]
-Ids(M) == {m.id : m \in M}
-FilterStep(M, s) == {m \in M : m.step = s}
-IsGraph(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
-PickFrom(S) == CHOOSE x \in S : TRUE \* pick an arbitrary element from a set
+(**************************************************************************************)
+(* A message consists of an identifier, a step number, and a coffer of message        *)
+(* identifiers.                                                                       *)
+(*                                                                                    *)
+(* We usually use M for sets of messages, which we sometimes interpret as DAGs.       *)
+(**************************************************************************************)
 
-(**************************************************************************)
-(* If M is a message DAG, Height(m, M) is the height of message m in DAG. *)
-(**************************************************************************)
+Message == [id : MessageID, step: Step, coffer : SUBSET MessageID]
+Sender(m) == m.id[1]
+
+\* Whether a set of messages M forms a graph (i.e. there are no dangling edges):
+IsGraph(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
+
+(**************************************************************************************)
+(* If M is a message DAG, Height(m, M) is the height of message m in the DAG.         *)
+(**************************************************************************************)
 RECURSIVE Height(_,_)
 Height(m, M) == IF m.coffer = {} THEN 0 ELSE
     LET cofferMsgs == {m2 \in M : m2.id \in m.coffer} IN
         1 + MaxInteger({Height(m2, M) : m2 \in cofferMsgs})
 
+\* TODO not used anymore
 RECURSIVE RecursiveMatryoska(_, _)
 RecursiveMatryoska(m, M) ==
     IF m.coffer = {} /\ m.step = 0
@@ -60,66 +60,113 @@ RecursiveMatryoska(m, M) ==
         /\  m2.step = m.step-1
         /\  RecursiveMatryoska(m2, M)
 
-(****************************)
-(* Now on to BootstrapSieve *)
-(****************************)
+(**************************************************************************************)
+(* Now on to BootstrapSieve                                                           *)
+(**************************************************************************************)
+
+SuperMajorityOf(S1, S2) ==
+    /\  S1 \subseteq S2
+    /\  2*Cardinality(S1) > Cardinality(S2)
 
 ConsistentSuccessor(M, m) ==
-    SuperMajority(Ids(M), m.coffer)
+    SuperMajorityOf({msg.id : msg \in M}, m.coffer)
 
 RECURSIVE ConsistentDAG(_)
+\* Whether the DAG M is consistent DAG
+\* The seed is {m \in M : m.step = MinInteger({msg.step : msg \in M})}
 ConsistentDAG(M) == IF M = {} THEN TRUE ELSE
     LET maxStep == MaxInteger({m.step : m \in M})
     IN  IF \A m \in M : m.step = maxStep
         THEN TRUE
         ELSE
-            LET tip == FilterStep(M, maxStep)
-                prevTip == FilterStep(M, maxStep-1)
-            IN  /\  \A m \in tip : ConsistentSuccessor(prevTip, m)
+            LET tip == {m \in M : m.step = maxStep}
+                tipPreds == {m \in M : m.step = maxStep-1}
+            IN  /\  \A m \in tip : ConsistentSuccessor(tipPreds, m)
                 /\  ConsistentDAG(M \ tip)
+
+
+(**************************************************************************************)
+(* We now define BootstrapSieve recursively.                                          *)
+(* For example, if messages in M span steps 0 to 3 (included), we have:               *)
+(*                                                                                    *)
+(*     BootstrapSieve(M) = FilterAntique(FilterAntique(FilterAntique(M,1),2),3)       *)
+(**************************************************************************************)
+
+(**************************************************************************************)
+(* RECURSIVE BootstrapSieveRec(_, _)                                                  *)
+(* BootstrapSieve(M) == IF M = {} THEN {} ELSE                                        *)
+(*     LET maxStep == MaxInteger({m.step : m \in M})                                  *)
+(*     IN  BootstrapSieveRec(M, maxStep)                                              *)
+(*                                                                                    *)
+(* \* Filter step-s messages deemed antique:                                          *)
+(* FilterAntique(M, s) == \* assumes all messages in M have a step number >= s-1      *)
+(*     LET consistentDAGs ==                                                          *)
+(*             {D \in SUBSET M : ConsistentDAG(D) /\ \E m \in D : m.step = s-1}       *)
+(*     IN  {m \in M : \* messages we keep (i.e. not antique and step >= s)            *)
+(*         \/  m.step > s                                                             *)
+(*         \/  /\  m.step = s                                                         *)
+(*             /\  \E D \in consistentDAGs : m \in D                                  *)
+(*             /\  LET CA == PickOne( \* pick a max-cardinality consistent DAG containing m *)
+(*                         MaxCardinalitySets({D \in consistentDAGs : m \in D}))      *)
+(*                 IN  \A CB \in consistentDAGs : \* all disjoint consistent DAGs are of lower cardinality *)
+(*                         CA \cap CB = {} => Cardinality(CB) < Cardinality(CA)}      *)
+(*                                                                                    *)
+(* BootstrapSieveRec(M, s) == IF M = {} \/ s = 0 THEN M ELSE                          *)
+(*     FilterAntique(BootstrapSieveRec(M, s-1), s)                                    *)
+(**************************************************************************************)
 
 RECURSIVE BootstrapSieveRec(_, _)
 BootstrapSieve(M) == BootstrapSieveRec(M, 1)
-FilterAntique(M, s) == \* assumes all messages in M have a step number >= s-1
-    LET consistentDAGs == 
+
+\* Filter step-s messages deemed antique (assuming all messages in M have a step number >= s-1):
+FilterAntique(M, s) ==
+    LET consistentDAGs ==
             {D \in SUBSET M : ConsistentDAG(D) /\ \E m \in D : m.step = s-1}
     IN  {m \in M : \* messages we keep (i.e. not antique and step >= s)
         \/  m.step > s
         \/  /\  m.step = s \* could we use m.step >= s instead?
             /\  \E D \in consistentDAGs : m \in D
-            /\  LET CA == PickFrom( \* pick a max-cardinality consistent DAG containing m
+            /\  LET CA == PickOne( \* pick a max-cardinality consistent DAG containing m
                         MaxCardinalitySets({D \in consistentDAGs : m \in D}))
                 IN  \A CB \in consistentDAGs : \* all disjoint consistent DAGs are of lower cardinality
                         CA \cap CB = {} => Cardinality(CB) < Cardinality(CA)}
-BootstrapSieveRec(M, s) == 
-    IF M = {}
-    THEN M
-    ELSE
-        LET maxStep == MaxInteger({m.step : m \in M})
-        IN  IF s > maxStep
-            THEN M
-            ELSE BootstrapSieveRec(FilterAntique(M,s), s+1)
 
+(* BootstrapSieveRec(M, s) == *)
+    (* IF M = {} *)
+    (* THEN M *)
+    (* ELSE *)
+        (* LET maxStep == MaxInteger({m.step : m \in M}) *)
+        (* IN  IF s > maxStep *)
+            (* THEN M *)
+            (* ELSE BootstrapSieveRec(FilterAntique(M,s), s+1) *)
+
+\* TODO why does this break?
+BootstrapSieveRec(M, s) == \* TODO: inline FilterAntique?
+    LET nonAntiqueStepS == FilterAntique(M, s)
+    IN  IF \E m \in M : m.step > s
+        THEN BootstrapSieveRec(nonAntiqueStepS, s+1)
+        ELSE nonAntiqueStepS
 
 (*--algorithm BootstrapSieve {
     variables
-        messages = {};
-        tick = 0;
+        messages = {}; \* messages sent
+        tick = 0; \* current tick (this is a synchronous system)
         phase = "start"; \* each tick has two phases: "start" and "end"
+        \* for each process, which phase of the current tick the processes has completed:
         donePhase = [p \in P |-> "end"];
-        pendingMessage = [p \in P |-> <<>>]; \* message we're computing the VDF on
-        messageCount = [p \in P |-> 0]; \* used to generate unique message IDs
+        pendingMessage = [p \in P |-> <<>>]; \* for each process, the message the process is working on
+        messageCount = [p \in P |-> 0]; \* auxiliary variable used to generate unique message IDs
     define {
-        step == tick \div tWB
-        correctMessages == {m \in messages : sender(m) \in P \ B}
-        \* possible sets of messages received by a well-behaved process:
-        recursiveMatryoskaMsgs ==
-            LET msgs == {m \in messages : m.step < step /\ RecursiveMatryoska(m, messages)}
-            IN {M \in SUBSET msgs : IsGraph(M) /\ correctMessages \subseteq  M}
+        step == tick \div tWB \* the current step
+        \* the set of messages sent by correct processes:
+        correctMessages == {m \in messages : Sender(m) \in P \ B}
     }
     macro sendMessage(m) {
         messages := messages \cup {m}
     }
+(**************************************************************************************)
+(*     We use a global scheduler process to move the system clock:                    *)
+(**************************************************************************************)
     process (clock \in {"clock"}) {
 tick:   while (TRUE) {
             await \A p \in P : donePhase[p] = phase;
@@ -137,12 +184,12 @@ l1:     while (TRUE) {
             await phase = "start";
             if (tick % tWB = 0) {
                 \* Start the VDF computation for the next message:
-                with (msgs \in recursiveMatryoskaMsgs)
+                with (msgs = {m \in messages : m.step < step})
                 with (predMsgs = BootstrapSieve(msgs)) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
                         step |-> step,
-                        coffer |-> Ids(predMsgs)];
+                        coffer |-> {m.id : m \in predMsgs}];
                     messageCount[self] := messageCount[self]+1
                 }
             };
@@ -161,13 +208,13 @@ lb1:    while (TRUE) {
             if (tick % tAdv = 0) {
                 \* Start the VDF computation for the next message:
                 with (maxStep = MaxInteger({m.step : m \in messages} \cup {0}))
-                with (stp \in {maxStep, maxStep+1}) \* TODO why?
+                with (stp \in {maxStep, maxStep+1}) \* trying to limit state explosion a bit
                 with (predMsgs \in SUBSET {m \in messages : m.step = stp-1}) {
                     when stp > 0 => predMsgs # {};
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
                         step |-> stp,
-                        coffer |-> Ids(predMsgs)];
+                        coffer |-> {m.id : m \in predMsgs}];
                     messageCount[self] := messageCount[self]+1
                 }
             };
@@ -180,17 +227,14 @@ lb2:        await phase = "end";
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "4aaf2129" /\ chksum(tla) = "a5a57505")
-\* Label tick of process clock at line 124 col 9 changed to tick_
+\* BEGIN TRANSLATION (chksum(pcal) = "d746a597" /\ chksum(tla) = "7a643fcb")
+\* Label tick of process clock at line 162 col 9 changed to tick_
 VARIABLES pc, messages, tick, phase, donePhase, pendingMessage, messageCount
 
 (* define statement *)
 step == tick \div tWB
-correctMessages == {m \in messages : sender(m) \in P \ B}
 
-recursiveMatryoskaMsgs ==
-    LET msgs == {m \in messages : m.step < step /\ RecursiveMatryoska(m, messages)}
-    IN {M \in SUBSET msgs : IsGraph(M) /\ correctMessages \subseteq  M}
+correctMessages == {m \in messages : Sender(m) \in P \ B}
 
 
 vars == << pc, messages, tick, phase, donePhase, pendingMessage, messageCount
@@ -217,7 +261,7 @@ tick_(self) == /\ pc[self] = "tick_"
                      ELSE /\ phase' = "start"
                           /\ tick' = tick+1
                /\ pc' = [pc EXCEPT ![self] = "tick_"]
-               /\ UNCHANGED << messages, donePhase, pendingMessage, 
+               /\ UNCHANGED << messages, donePhase, pendingMessage,
                                messageCount >>
 
 clock(self) == tick_(self)
@@ -225,12 +269,12 @@ clock(self) == tick_(self)
 l1(self) == /\ pc[self] = "l1"
             /\ phase = "start"
             /\ IF tick % tWB = 0
-                  THEN /\ \E msgs \in recursiveMatryoskaMsgs:
+                  THEN /\ LET msgs == {m \in messages : m.step < step} IN
                             LET predMsgs == BootstrapSieve(msgs) IN
                               /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
                                                                                     id |-> <<self,messageCount[self]+1>>,
                                                                                     step |-> step,
-                                                                                    coffer |-> Ids(predMsgs)]]
+                                                                                    coffer |-> {m.id : m \in predMsgs}]]
                               /\ messageCount' = [messageCount EXCEPT ![self] = messageCount[self]+1]
                   ELSE /\ TRUE
                        /\ UNCHANGED << pendingMessage, messageCount >>
@@ -260,7 +304,7 @@ lb1(self) == /\ pc[self] = "lb1"
                                  /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
                                                                                        id |-> <<self,messageCount[self]+1>>,
                                                                                        step |-> stp,
-                                                                                       coffer |-> Ids(predMsgs)]]
+                                                                                       coffer |-> {m.id : m \in predMsgs}]]
                                  /\ messageCount' = [messageCount EXCEPT ![self] = messageCount[self]+1]
                    ELSE /\ TRUE
                         /\ UNCHANGED << pendingMessage, messageCount >>
@@ -286,10 +330,10 @@ Next == (\E self \in {"clock"}: clock(self))
 
 Spec == Init /\ [][Next]_vars
 
-\* END TRANSLATION 
+\* END TRANSLATION
 
 \* Invariant describing the type of the variables:
-TypeOK == 
+TypeOK ==
     /\  messages \in SUBSET Message
     /\  pendingMessage \in [P -> Message \cup {<<>>}]
     /\  tick \in Tick
@@ -310,6 +354,5 @@ Safety == \A p \in P \ B : LET m == pendingMessage[p] IN
     /\  \A m2 \in correctMessages : m2.step = m.step-1 => m2.id \in m.coffer
     /\  LET M == {m2 \in correctMessages : m2.step = m.step-1}
         IN  ConsistentSuccessor(M, m)
-
 
 ============================================================

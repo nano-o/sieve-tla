@@ -2,6 +2,9 @@
 
 EXTENDS Integers, FiniteSets
 
+\* Convenience operator to pick an arbitrary element from a set:
+PickOne(S) == CHOOSE x \in S : TRUE
+
 \* The intersection of a set of sets:
 Intersection(Ss) == {x \in UNION Ss : \A S \in Ss : x \in S}
 
@@ -16,6 +19,7 @@ MaximalElements(X, Leq(_,_)) ==
 MinimalElements(X, Leq(_,_)) ==
     {m \in X : \A x \in X : \neg (Leq(x,m) /\ \neg Leq(m,x))}
 
+\* a test:
 ASSUME MinimalElements({{1},{0,2},{0,2,3},{3}}, \subseteq) = {{0,2},{1},{3}}
 
 MaxInteger(I) == Max(I, <=)
@@ -26,6 +30,7 @@ MaximalSets(S) == MaximalElements(S, \subseteq)
 MinimalSets(S) == MinimalElements(S, \subseteq)
 
 
+\* a test:
 ASSUME MinCardinalitySets({{1},{0,2},{0,2,3},{3}}) = {{1},{3}}
 
 ===========================================

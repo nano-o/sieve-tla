@@ -1,9 +1,10 @@
-## Blacklist all files
+## Block all files
 *
 
-## now whitelist stuff
+## Now allow stuff
 
 !*.md
+!Makefile
 
 !.gitignore
 
@@ -11,18 +12,18 @@
 
 !*.tla
 
-## Whitelist TLC model config and results
+## Allow TLC model config and results
 !*.cfg
 !*.out
 
-## Whitelist Toolbox model metadata
+## Allow Toolbox model metadata
 !*.launch
 
-## Whitelist Toolbox spec metadata
+## Allow Toolbox spec metadata
 !.project
 !*.prefs
 
-## Whitelist all folders
+## Allow all folders
 #!*/
 
 ## quint spec
