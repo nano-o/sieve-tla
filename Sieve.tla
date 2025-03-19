@@ -116,32 +116,26 @@ ConsistentDAG(M) == IF M = {} THEN TRUE ELSE
 (**************************************************************************************)
 
 RECURSIVE BootstrapSieveRec(_, _)
-BootstrapSieve(M) == BootstrapSieveRec(M, 1)
+BootstrapSieve(M) ==
+    IF \A m \in M : m.step = 0
+    THEN M
+    ELSE BootstrapSieveRec(M, 1)
 
-\* Filter step-s messages deemed antique (assuming all messages in M have a step number >= s-1):
+\* Filter out step-s messages deemed antique (assuming all messages in M have a step number >= s-1):
 FilterAntique(M, s) ==
     LET consistentDAGs ==
             {D \in SUBSET M : ConsistentDAG(D) /\ \E m \in D : m.step = s-1}
     IN  {m \in M : \* messages we keep (i.e. not antique and step >= s)
         \/  m.step > s
-        \/  /\  m.step = s \* could we use m.step >= s instead?
+        \/  /\  m.step = s
             /\  \E D \in consistentDAGs : m \in D
             /\  LET CA == PickOne( \* pick a max-cardinality consistent DAG containing m
                         MaxCardinalitySets({D \in consistentDAGs : m \in D}))
                 IN  \A CB \in consistentDAGs : \* all disjoint consistent DAGs are of lower cardinality
                         CA \cap CB = {} => Cardinality(CB) < Cardinality(CA)}
 
-(* BootstrapSieveRec(M, s) == *)
-    (* IF M = {} *)
-    (* THEN M *)
-    (* ELSE *)
-        (* LET maxStep == MaxInteger({m.step : m \in M}) *)
-        (* IN  IF s > maxStep *)
-            (* THEN M *)
-            (* ELSE BootstrapSieveRec(FilterAntique(M,s), s+1) *)
-
-\* TODO why does this break?
-BootstrapSieveRec(M, s) == \* TODO: inline FilterAntique?
+BootstrapSieveRec(M, s) ==
+    \* We filter out step-s antique messages then call BootstrapSieveRec(_, s+1)
     LET nonAntiqueStepS == FilterAntique(M, s)
     IN  IF \E m \in M : m.step > s
         THEN BootstrapSieveRec(nonAntiqueStepS, s+1)
@@ -227,8 +221,8 @@ lb2:        await phase = "end";
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "d746a597" /\ chksum(tla) = "7a643fcb")
-\* Label tick of process clock at line 162 col 9 changed to tick_
+\* BEGIN TRANSLATION (chksum(pcal) = "d746a597" /\ chksum(tla) = "3e69a08c")
+\* Label tick of process clock at line 165 col 9 changed to tick_
 VARIABLES pc, messages, tick, phase, donePhase, pendingMessage, messageCount
 
 (* define statement *)
@@ -261,7 +255,7 @@ tick_(self) == /\ pc[self] = "tick_"
                      ELSE /\ phase' = "start"
                           /\ tick' = tick+1
                /\ pc' = [pc EXCEPT ![self] = "tick_"]
-               /\ UNCHANGED << messages, donePhase, pendingMessage,
+               /\ UNCHANGED << messages, donePhase, pendingMessage, 
                                messageCount >>
 
 clock(self) == tick_(self)
