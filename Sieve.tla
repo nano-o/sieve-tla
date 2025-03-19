@@ -145,11 +145,6 @@ BootstrapSieveRec(M, s) ==
         donePhase = [p \in P |-> "end"];
         pendingMessage = [p \in P |-> <<>>]; \* for each process, the message the process is working on
         messageCount = [p \in P |-> 0]; \* auxiliary variable used to generate unique message IDs
-    define {
-        step == tick \div tWB \* the current step
-        \* the set of messages sent by correct processes:
-        correctMessages == {m \in messages : Sender(m) \in P \ B}
-    }
     macro sendMessage(m) {
         messages := messages \cup {m}
     }
@@ -167,17 +162,20 @@ tick:   while (TRUE) {
             }
         }
     }
+(**************************************************************************************)
+(* Next we specify the behavior of correct processes:                                 *)
+(**************************************************************************************)
     process (proc \in P \ B) \* a well-behaved process
     {
 l1:     while (TRUE) {
             await phase = "start";
             if (tick \mod tWB = 0) {
                 \* Start the proof-of-work computation for the next message:
-                with (msgs = {m \in messages : m.step < step})
+                with (msgs = {m \in messages : m.step < StepOf(tick)})
                 with (predMsgs = BootstrapSieve(msgs)) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
-                        step |-> step,
+                        step |-> StepOf(tick),
                         coffer |-> {m.id : m \in predMsgs}];
                     messageCount[self] := messageCount[self]+1
                 }
@@ -190,7 +188,11 @@ l2:         await phase = "end";
             donePhase[self] := "end";
         }
     }
-    process (byz \in B) \* a malicious process
+(**************************************************************************************)
+(* Finally, for the purpose of model-checking, we specify the allowed behavior of     *)
+(* Byzantine nodes:                                                                   *)
+(**************************************************************************************)
+    process (byz \in B)
     {
 lb1:    while (TRUE) {
             await phase = "start";
@@ -232,12 +234,13 @@ TypeOK ==
 (* previous round are all in m's coffer and consist of a strict majority of m's   *)
 (* coffer.                                                                        *)
 (**********************************************************************************)
-Safety == \A p \in P \ B : LET m == pendingMessage[p] IN
-    /\  m # <<>>
-    /\  m.step > 0
-    =>
-    /\  \A m2 \in correctMessages : m2.step = m.step-1 => m2.id \in m.coffer
-    /\  LET M == {m2 \in correctMessages : m2.step = m.step-1}
-        IN  ConsistentSuccessor(M, m)
+Safety == \A p \in P \ B :
+    LET pending == pendingMessage[p]
+        correctMessages == {m \in messages : Sender(m) \in P \ B}
+    IN  \/ pending = <<>>
+        \/  pending.step = 0
+        \/  /\  \A m \in correctMessages : m.step = pending.step-1 => m.id \in pending.coffer
+            /\  LET prevCorrect == {m \in correctMessages : m.step = pending.step-1}
+                IN  ConsistentSuccessor(prevCorrect, pending)
 
 ============================================================
