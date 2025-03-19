@@ -7,8 +7,6 @@
 (* we abstract over certain details and make some simplifying assumptions.            *)
 (* Nevertheless, this specification should clearly convey the main algorithmic        *)
 (* ideas behind `^Sieve^'.                                                            *)
-(*                                                                                    *)
-(* We make comments throughout the specification to explain what is going on.         *)
 (**************************************************************************************)
 
 EXTENDS FiniteSets, Integers, Utils, TLC
@@ -19,6 +17,9 @@ EXTENDS FiniteSets, Integers, Utils, TLC
 (*                                                                                    *)
 (* Time evolves in discrete ticks that are grouped into steps, and a step is an       *)
 (* intervale of tWB ticks.                                                            *)
+(*                                                                                    *)
+(* All processes are always active, and processes nevertheless always use             *)
+(* BootstrapSieve (so, this specification does not cover OnlineSieve).                *)
 (*                                                                                    *)
 (* As we will see, we do not model proofs of work explicitely. Instead, processes     *)
 (* just produce messages at a given fixed rate: Well-behaved processes produce 1      *)
@@ -105,9 +106,13 @@ ConsistentDAG(M) == IF M = {} THEN TRUE ELSE
 
 (**************************************************************************************)
 (* We now define BootstrapSieve recursively.                                          *)
-(* For example, if messages in M span steps 0 to 3 (included), we have:               *)
+(*                                                                                    *)
+(* For example, if messages in M span                                                 *)
+(* steps 0 to 3 (included), when unfolding the recursion we get:                      *)
 (*                                                                                    *)
 (*     BootstrapSieve(M) = FilterAntique(FilterAntique(FilterAntique(M,1),2),3)       *)
+(*                                                                                    *)
+(* The interesting part is the FilterAntique operator.                                *)
 (**************************************************************************************)
 
 RECURSIVE BootstrapSieveRec(_, _)
@@ -130,13 +135,13 @@ FilterAntique(M, s) ==
                         CA \cap CB = {} => Cardinality(CB) < Cardinality(CA)}
 
 BootstrapSieveRec(M, s) ==
-    \* We filter out step-s antique messages then call BootstrapSieveRec(_, s+1)
+    \* We filter out step-s antique messages then call BootstrapSieveRec for step s+1
     LET nonAntiqueStepS == FilterAntique(M, s)
     IN  IF \E m \in M : m.step > s
         THEN BootstrapSieveRec(nonAntiqueStepS, s+1)
         ELSE nonAntiqueStepS
 
-(*--algorithm BootstrapSieve {
+(*--algorithm Sieve {
     variables
         messages = {}; \* messages sent
         tick = 0; \* current tick (this is a synchronous system)
@@ -169,20 +174,20 @@ tick:   while (TRUE) {
     {
 l1:     while (TRUE) {
             await phase = "start";
-            if (tick \mod tWB = 0) {
+            if (tick % tWB = 0) {
                 \* Start the proof-of-work computation for the next message:
                 with (msgs = {m \in messages : m.step < StepOf(tick)})
-                with (predMsgs = BootstrapSieve(msgs)) {
+                with (coffer = BootstrapSieve(msgs)) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
                         step |-> StepOf(tick),
-                        coffer |-> {m.id : m \in predMsgs}];
-                    messageCount[self] := messageCount[self]+1
+                        coffer |-> {m.id : m \in coffer}];
+                    messageCount[self] := messageCount[self]+1;
                 }
             };
             donePhase[self] := "start";
 l2:         await phase = "end";
-            if (tick \mod tWB = tWB - 1)
+            if (tick % tWB = tWB - 1)
                 \* it's the end of the step, the proof-of-work has been computed
                 sendMessage(pendingMessage[self]);
             donePhase[self] := "end";
@@ -196,22 +201,22 @@ l2:         await phase = "end";
     {
 lb1:    while (TRUE) {
             await phase = "start";
-            if (tick \mod tAdv = 0) {
+            if (tick % tAdv = 0) {
                 \* Start the proof-of-work computation for the next message:
                 with (maxStep = MaxInteger({m.step : m \in messages} \cup {0}))
-                with (stp \in {maxStep, maxStep+1}) \* trying to limit state explosion a bit
-                with (predMsgs \in SUBSET {m \in messages : m.step = stp-1}) {
-                    when stp > 0 => predMsgs # {};
+                with (stp \in {maxStep, maxStep+1}) \* trying to limit state-space explosion a bit
+                with (coffer \in SUBSET {m \in messages : m.step = stp-1}) {
+                    when stp > 0 => coffer # {};
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>,
                         step |-> stp,
-                        coffer |-> {m.id : m \in predMsgs}];
+                        coffer |-> {m.id : m \in coffer}];
                     messageCount[self] := messageCount[self]+1
                 }
             };
             donePhase[self] := "start";
 lb2:        await phase = "end";
-            if (tick \mod tAdv = tAdv - 1)
+            if (tick % tAdv = tAdv - 1)
                 sendMessage(pendingMessage[self]);
             donePhase[self] := "end";
         };
@@ -237,10 +242,12 @@ TypeOK ==
 Safety == \A p \in P \ B :
     LET pending == pendingMessage[p]
         correctMessages == {m \in messages : Sender(m) \in P \ B}
-    IN  \/ pending = <<>>
+    IN  \/  pending = <<>>
         \/  pending.step = 0
-        \/  /\  \A m \in correctMessages : m.step = pending.step-1 => m.id \in pending.coffer
-            /\  LET prevCorrect == {m \in correctMessages : m.step = pending.step-1}
+        \/  /\  \A m \in correctMessages :
+                    m.step = pending.step-1 => m.id \in pending.coffer
+            /\  LET prevCorrect ==
+                        {m \in correctMessages : m.step = pending.step-1}
                 IN  ConsistentSuccessor(prevCorrect, pending)
 
 ============================================================
