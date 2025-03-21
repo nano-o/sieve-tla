@@ -1,19 +1,19 @@
 ------------ MODULE Sieve ----------------
 
 (**************************************************************************************)
-(* `^PlusCal/TLA+^' specification of `^Sieve^'.                                       *)
+(* `^PlusCal/TLA+^' specification of `^Sieve.^'                                       *)
 (*                                                                                    *)
 (* We specify the algorithm and its environment at a high level. This means that      *)
 (* we abstract over certain details and make some simplifying assumptions.            *)
 (* Nevertheless, this specification should clearly convey the main algorithmic        *)
-(* ideas behind `^Sieve^'.                                                            *)
+(* ideas behind `^Sieve.^'                                                            *)
 (**************************************************************************************)
 
 EXTENDS FiniteSets, Integers, Utils, TLC
 
 (**************************************************************************************)
 (* We start by declaring constant parameters: the sets of processes P, among which    *)
-(* B is the set of Byzantine nodes, and two integer constants tAdv and tWB.           *)
+(* B is the set of `^Byzantine^' nodes, and two integer constants tAdv and tWB.       *)
 (*                                                                                    *)
 (* Time evolves in discrete ticks that are grouped into steps, and a step is an       *)
 (* intervale of tWB ticks.                                                            *)
@@ -28,13 +28,13 @@ EXTENDS FiniteSets, Integers, Utils, TLC
 (* processes produce a number of messages strictly greater than the number of         *)
 (* messages produced by malicious processes.                                          *)
 (*                                                                                    *)
-(* Byzantine processes always produce well-formed messages, but they are              *)
+(* `^Byzantine^' processes always produce well-formed messages, but they are          *)
 (* free to populate their message's coffers arbitrarily.                              *)
 (**************************************************************************************)
 
 CONSTANTS
     P \* the set of processes
-,   B \* the set of Byzantine, malicious processes
+,   B \* the set of `^Byzantine^', malicious processes
 ,   tAdv \* the time it takes for a malicious process to produce a message
 ,   tWB \* the time it takes for a well-behaved process to produce a message
 
@@ -58,26 +58,8 @@ MessageID == P\times Nat
 Message == [id : MessageID, step: Step, coffer : SUBSET MessageID]
 Sender(m) == m.id[1]
 
-\* Whether a set of messages M forms a graph (i.e. there are no dangling edges):
+\* Whether a set of messages M forms a graph `^(i.e.\^' there are no dangling edges):
 IsGraph(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
-
-(**************************************************************************************)
-(* If M is a message DAG, Height(m, M) is the height of message m in the DAG.         *)
-(**************************************************************************************)
-RECURSIVE Height(_,_)
-Height(m, M) == IF m.coffer = {} THEN 0 ELSE
-    LET cofferMsgs == {m2 \in M : m2.id \in m.coffer} IN
-        1 + MaxInteger({Height(m2, M) : m2 \in cofferMsgs})
-
-\* TODO not used anymore
-RECURSIVE RecursiveMatryoska(_, _)
-RecursiveMatryoska(m, M) ==
-    IF m.coffer = {} /\ m.step = 0
-    THEN TRUE
-    ELSE LET cofferMsgs == {m2 \in M : m2.id \in m.coffer} IN
-        \A m2 \in cofferMsgs :
-        /\  m2.step = m.step-1
-        /\  RecursiveMatryoska(m2, M)
 
 (**************************************************************************************)
 (* Now on to BootstrapSieve                                                           *)
@@ -90,10 +72,10 @@ SuperMajorityOf(S1, S2) ==
 ConsistentSuccessor(M, m) ==
     SuperMajorityOf({msg.id : msg \in M}, m.coffer)
 
-RECURSIVE ConsistentDAG(_)
+RECURSIVE ConsistentSet(_)
 \* Whether the DAG M is consistent DAG
-\* The seed is {m \in M : m.step = MinInteger({msg.step : msg \in M})}
-ConsistentDAG(M) == IF M = {} THEN TRUE ELSE
+\* NOTE: seems that every step-(s+1) message must point to every step-s message
+ConsistentSet(M) == IF M = {} THEN TRUE ELSE
     LET maxStep == MaxInteger({m.step : m \in M})
     IN  IF \A m \in M : m.step = maxStep
         THEN TRUE
@@ -101,7 +83,7 @@ ConsistentDAG(M) == IF M = {} THEN TRUE ELSE
             LET tip == {m \in M : m.step = maxStep}
                 tipPreds == {m \in M : m.step = maxStep-1}
             IN  /\  \A m \in tip : ConsistentSuccessor(tipPreds, m)
-                /\  ConsistentDAG(M \ tip)
+                /\  ConsistentSet(M \ tip)
 
 
 (**************************************************************************************)
@@ -123,15 +105,15 @@ BootstrapSieve(M) ==
 
 \* Filter out step-s messages deemed antique (assuming all messages in M have a step number >= s-1):
 FilterAntique(M, s) ==
-    LET consistentDAGs ==
-            {D \in SUBSET M : ConsistentDAG(D) /\ \E m \in D : m.step = s-1}
+    LET consistentSets ==
+            {D \in SUBSET M : ConsistentSet(D) /\ \E m \in D : m.step = s-1}
     IN  {m \in M : \* messages we keep (i.e. not antique and step >= s)
         \/  m.step > s
         \/  /\  m.step = s
-            /\  \E D \in consistentDAGs : m \in D
+            /\  \E D \in consistentSets : m \in D
             /\  LET CA == PickOne( \* pick a max-cardinality consistent DAG containing m
-                        MaxCardinalitySets({D \in consistentDAGs : m \in D}))
-                IN  \A CB \in consistentDAGs : \* all disjoint consistent DAGs are of lower cardinality
+                        MaxCardinalitySets({D \in consistentSets : m \in D}))
+                IN  \A CB \in consistentSets : \* all disjoint consistent DAGs are of lower cardinality
                         CA \cap CB = {} => Cardinality(CB) < Cardinality(CA)}
 
 BootstrapSieveRec(M, s) ==
@@ -179,7 +161,7 @@ l1:     while (TRUE) {
                 with (msgs = {m \in messages : m.step < StepOf(tick)})
                 with (coffer = BootstrapSieve(msgs)) {
                     pendingMessage[self] := [
-                        id |-> <<self,messageCount[self]+1>>,
+                        id |-> <<self,messageCount[self]+1>>, \* new, unique ID
                         step |-> StepOf(tick),
                         coffer |-> {m.id : m \in coffer}];
                     messageCount[self] := messageCount[self]+1;
@@ -195,7 +177,7 @@ l2:         await phase = "end";
     }
 (**************************************************************************************)
 (* Finally, for the purpose of model-checking, we specify the allowed behavior of     *)
-(* Byzantine nodes:                                                                   *)
+(* `^Byzantine^' nodes:                                                               *)
 (**************************************************************************************)
     process (byz \in B)
     {
