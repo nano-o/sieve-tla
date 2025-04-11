@@ -29,7 +29,6 @@ MinCardinalitySets(S) == MinimalElements(S, LAMBDA C1,C2 : Cardinality(C1) <= Ca
 MaximalSets(S) == MaximalElements(S, \subseteq)
 MinimalSets(S) == MinimalElements(S, \subseteq)
 
-
 \* a test:
 ASSUME MinCardinalitySets({{1},{0,2},{0,2,3},{3}}) = {{1},{3}}
 

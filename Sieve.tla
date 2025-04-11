@@ -4,9 +4,11 @@
 (* `^PlusCal/TLA+^' specification of `^Sieve.^'                                       *)
 (*                                                                                    *)
 (* We specify the algorithm and its environment at a high level. This means that      *)
-(* we abstract over certain details and make some simplifying assumptions.            *)
-(* Nevertheless, this specification should clearly convey the main algorithmic        *)
-(* ideas behind `^Sieve.^'                                                            *)
+(* we abstract over certain details and make some simplifying assumptions. For        *)
+(* example, we do not model message weight; instead, we implicitely assume that       *)
+(* all mesages have weight 1 and we just count messages. Nevertheless, this           *)
+(* specification should clearly convey the main algorithmic ideas behind              *)
+(* `^Sieve.^'                                                                         *)
 (**************************************************************************************)
 
 EXTENDS FiniteSets, Integers, Utils, TLC
@@ -58,9 +60,6 @@ MessageID == P\times Nat
 Message == [id : MessageID, step: Step, coffer : SUBSET MessageID]
 Sender(m) == m.id[1]
 
-\* Whether a set of messages M forms a graph `^(i.e.\^' there are no dangling edges):
-IsGraph(M) == \A m \in M : \A i \in m.coffer : \E m2 \in M : m2.id = i
-
 (**************************************************************************************)
 (* Now on to BootstrapSieve                                                           *)
 (**************************************************************************************)
@@ -72,10 +71,9 @@ SuperMajorityOf(S1, S2) ==
 ConsistentSuccessor(M, m) ==
     SuperMajorityOf({msg.id : msg \in M}, m.coffer)
 
-RECURSIVE ConsistentSet(_)
+RECURSIVE ConsistentDAG(_)
 \* Whether the DAG M is consistent DAG
-\* NOTE: seems that every step-(s+1) message must point to every step-s message
-ConsistentSet(M) == IF M = {} THEN TRUE ELSE
+ConsistentDAG(M) == IF M = {} THEN TRUE ELSE
     LET maxStep == MaxInteger({m.step : m \in M})
     IN  IF \A m \in M : m.step = maxStep
         THEN TRUE
@@ -83,8 +81,7 @@ ConsistentSet(M) == IF M = {} THEN TRUE ELSE
             LET tip == {m \in M : m.step = maxStep}
                 tipPreds == {m \in M : m.step = maxStep-1}
             IN  /\  \A m \in tip : ConsistentSuccessor(tipPreds, m)
-                /\  ConsistentSet(M \ tip)
-
+                /\  ConsistentDAG(M \ tip)
 
 (**************************************************************************************)
 (* We now define BootstrapSieve recursively.                                          *)
@@ -103,10 +100,13 @@ BootstrapSieve(M) ==
     THEN M
     ELSE BootstrapSieveRec(M, 1)
 
-\* Filter out step-s messages deemed antique (assuming all messages in M have a step number >= s-1):
+(**************************************************************************************)
+(* Filter out step-s messages deemed antique, assuming all messages in M have a       *)
+(* step number >= s-1 and step-(s-1) messages in M satisfy the Sieve invariant:       *)
+(**************************************************************************************)
 FilterAntique(M, s) ==
     LET consistentSets ==
-            {D \in SUBSET M : ConsistentSet(D) /\ \E m \in D : m.step = s-1}
+            {D \in SUBSET M : ConsistentDAG(D) /\ \E m \in D : m.step = s-1}
     IN  {m \in M : \* messages we keep (i.e. not antique and step >= s)
         \/  m.step > s
         \/  /\  m.step = s
