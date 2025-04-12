@@ -25,7 +25,7 @@ B == {p1}
 tAdv == 2
 tWB == 3
 
-VARIABLES pc, messages, tick, phase, donePhase, pendingMessage, messageCount
+VARIABLES pc, messages, tick, phase, donePhase, pendingMessage, messageCount, L
 
 INSTANCE Sieve
 
@@ -39,9 +39,9 @@ m4 == [id |-> <<p1, 2>>, step |-> 1, coffer |-> {<<p1,1>>,<<p2,1>>}]
 m5 == [id |-> <<p2, 2>>, step |-> 2, coffer |-> {<<p1,2>>}]
 
 ASSUME ConsistentSuccessor({m1,m2}, m4)
-ASSUME ConsistentSet({m1,m2,m4})
-ASSUME ConsistentSet({m1,m2,m4,m5})
-ASSUME ConsistentSet({m4,m5})
+ASSUME ConsistentDAG({m1,m2,m4})
+ASSUME ConsistentDAG({m1,m2,m4,m5})
+ASSUME ConsistentDAG({m4,m5})
 ASSUME BootstrapSieve({m1,m2,m4,m5}) = {m5}
 (* ASSUME PrintT(BootstrapSieve({m1,m2,m3})) *)
 (* ASSUME FALSE *)

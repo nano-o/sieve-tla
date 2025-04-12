@@ -1,6 +1,11 @@
 ------------ MODULE Sieve ----------------
 
 (**************************************************************************************)
+(* TODO: add online-sieve! Perhaps non-deterministically pick online or bootstrap     *)
+(* sieve when possible                                                                *)
+(**************************************************************************************)
+
+(**************************************************************************************)
 (* `^PlusCal/TLA+^' specification of `^Sieve.^'                                       *)
 (*                                                                                    *)
 (* We specify the algorithm and its environment at a high level. This means that      *)
@@ -60,13 +65,26 @@ MessageID == P\times Nat
 Message == [id : MessageID, step: Step, coffer : SUBSET MessageID]
 Sender(m) == m.id[1]
 
-(**************************************************************************************)
-(* Now on to BootstrapSieve                                                           *)
-(**************************************************************************************)
-
+\* Whether S1 consists of a supermajority of S2:
 SuperMajorityOf(S1, S2) ==
     /\  S1 \subseteq S2
     /\  2*Cardinality(S1) > Cardinality(S2)
+
+(**************************************************************************************)
+(* First we specify OnlineSieve. OnlineSieve at step s fiters a set of newly          *)
+(* received messages M given the set L of non-antique messages computed               *)
+(* previously.                                                                        *)
+(**************************************************************************************)
+OnlineSieve(s, M, L) ==
+    IF s <= 1 THEN M
+    ELSE LET LIDs == {m.id : m \in L} IN
+        {m \in M :
+            /\  m.step = s-1
+            /\  2*Cardinality(LIDs \cap m.coffer) > Cardinality(LIDs)}
+
+(**************************************************************************************)
+(* Next we specify BootstrapSieve                                                     *)
+(**************************************************************************************)
 
 ConsistentSuccessor(M, m) ==
     SuperMajorityOf({msg.id : msg \in M}, m.coffer)
@@ -123,20 +141,24 @@ BootstrapSieveRec(M, s) ==
         THEN BootstrapSieveRec(nonAntiqueStepS, s+1)
         ELSE nonAntiqueStepS
 
+(**************************************************************************************)
+(* We are now ready to specify Sieve                                                  *)
+(**************************************************************************************)
 (*--algorithm Sieve {
     variables
-        messages = {}; \* messages sent
-        tick = 0; \* current tick (this is a synchronous system)
-        phase = "start"; \* each tick has two phases: "start" and "end"
+        messages = {}, \* messages sent
+        tick = 0, \* current tick (this is a synchronous system)
+        phase = "start", \* each tick has two phases: "start" and "end"
         \* for each process, which phase of the current tick the processes has completed:
-        donePhase = [p \in P |-> "end"];
-        pendingMessage = [p \in P |-> <<>>]; \* for each process, the message the process is working on
-        messageCount = [p \in P |-> 0]; \* auxiliary variable used to generate unique message IDs
+        donePhase = [p \in P |-> "end"],
+        pendingMessage = [p \in P |-> <<>>], \* for each process, the message the process is working on
+        messageCount = [p \in P |-> 0], \* auxiliary variable used to generate unique message IDs
+        L = [p \in P |-> {}]; \* non-antique messages computed in the previous step
     macro sendMessage(m) {
         messages := messages \cup {m}
     }
 (**************************************************************************************)
-(*     We use a global scheduler process to move the system clock:                    *)
+(*     The system clock:                                                              *)
 (**************************************************************************************)
     process (clock \in {"clock"}) {
 tick:   while (TRUE) {
@@ -159,12 +181,18 @@ l1:     while (TRUE) {
             if (tick % tWB = 0) {
                 \* Start the proof-of-work computation for the next message:
                 with (msgs = {m \in messages : m.step < StepOf(tick)})
-                with (coffer = BootstrapSieve(msgs)) {
+                \* If L is non-empty, non-deterministically use either BootstrapSieve or OnlineSieve
+                \* That way we excercise both without having to explicitely model processes being offline/online
+                with (coffer \in
+                        IF L[self] = {}
+                        THEN {BootstrapSieve(msgs)}
+                        ELSE {BootstrapSieve(msgs),OnlineSieve(StepOf(tick), msgs, L[self])}) {
                     pendingMessage[self] := [
                         id |-> <<self,messageCount[self]+1>>, \* new, unique ID
                         step |-> StepOf(tick),
                         coffer |-> {m.id : m \in coffer}];
                     messageCount[self] := messageCount[self]+1;
+                    L[self] := coffer
                 }
             };
             donePhase[self] := "start";
@@ -186,7 +214,8 @@ lb1:    while (TRUE) {
             if (tick % tAdv = 0) {
                 \* Start the proof-of-work computation for the next message:
                 with (maxStep = MaxInteger({m.step : m \in messages} \cup {0}))
-                with (stp \in {maxStep, maxStep+1}) \* trying to limit state-space explosion a bit
+                \* we restrict Byzantine nodes a bit to limit combinatorial explosion
+                with (stp \in {maxStep, maxStep+1}) 
                 with (coffer \in SUBSET {m \in messages : m.step = stp-1}) {
                     when stp > 0 => coffer # {};
                     pendingMessage[self] := [
@@ -205,6 +234,109 @@ lb2:        await phase = "end";
     }
 }
 *)
+\* BEGIN TRANSLATION (chksum(pcal) = "78f02d63" /\ chksum(tla) = "8d57a6b4")
+\* Label tick of process clock at line 164 col 9 changed to tick_
+VARIABLES pc, messages, tick, phase, donePhase, pendingMessage, messageCount, 
+          L
+
+vars == << pc, messages, tick, phase, donePhase, pendingMessage, messageCount, 
+           L >>
+
+ProcSet == ({"clock"}) \cup (P \ B) \cup (B)
+
+Init == (* Global variables *)
+        /\ messages = {}
+        /\ tick = 0
+        /\ phase = "start"
+        /\ donePhase = [p \in P |-> "end"]
+        /\ pendingMessage = [p \in P |-> <<>>]
+        /\ messageCount = [p \in P |-> 0]
+        /\ L = [p \in P |-> {}]
+        /\ pc = [self \in ProcSet |-> CASE self \in {"clock"} -> "tick_"
+                                        [] self \in P \ B -> "l1"
+                                        [] self \in B -> "lb1"]
+
+tick_(self) == /\ pc[self] = "tick_"
+               /\ \A p \in P : donePhase[p] = phase
+               /\ IF phase = "start"
+                     THEN /\ phase' = "end"
+                          /\ tick' = tick
+                     ELSE /\ phase' = "start"
+                          /\ tick' = tick+1
+               /\ pc' = [pc EXCEPT ![self] = "tick_"]
+               /\ UNCHANGED << messages, donePhase, pendingMessage, 
+                               messageCount, L >>
+
+clock(self) == tick_(self)
+
+l1(self) == /\ pc[self] = "l1"
+            /\ phase = "start"
+            /\ IF tick % tWB = 0
+                  THEN /\ LET msgs == {m \in messages : m.step < StepOf(tick)} IN
+                            \E coffer \in IF L[self] = {}
+                                          THEN {BootstrapSieve(msgs)}
+                                          ELSE {BootstrapSieve(msgs),OnlineSieve(StepOf(tick), msgs, L[self])}:
+                              /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
+                                                                                    id |-> <<self,messageCount[self]+1>>,
+                                                                                    step |-> StepOf(tick),
+                                                                                    coffer |-> {m.id : m \in coffer}]]
+                              /\ messageCount' = [messageCount EXCEPT ![self] = messageCount[self]+1]
+                              /\ L' = [L EXCEPT ![self] = coffer]
+                  ELSE /\ TRUE
+                       /\ UNCHANGED << pendingMessage, messageCount, L >>
+            /\ donePhase' = [donePhase EXCEPT ![self] = "start"]
+            /\ pc' = [pc EXCEPT ![self] = "l2"]
+            /\ UNCHANGED << messages, tick, phase >>
+
+l2(self) == /\ pc[self] = "l2"
+            /\ phase = "end"
+            /\ IF tick % tWB = tWB - 1
+                  THEN /\ messages' = (messages \cup {(pendingMessage[self])})
+                  ELSE /\ TRUE
+                       /\ UNCHANGED messages
+            /\ donePhase' = [donePhase EXCEPT ![self] = "end"]
+            /\ pc' = [pc EXCEPT ![self] = "l1"]
+            /\ UNCHANGED << tick, phase, pendingMessage, messageCount, L >>
+
+proc(self) == l1(self) \/ l2(self)
+
+lb1(self) == /\ pc[self] = "lb1"
+             /\ phase = "start"
+             /\ IF tick % tAdv = 0
+                   THEN /\ LET maxStep == MaxInteger({m.step : m \in messages} \cup {0}) IN
+                             \E stp \in {maxStep, maxStep+1}:
+                               \E coffer \in SUBSET {m \in messages : m.step = stp-1}:
+                                 /\ stp > 0 => coffer # {}
+                                 /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
+                                                                                       id |-> <<self,messageCount[self]+1>>,
+                                                                                       step |-> stp,
+                                                                                       coffer |-> {m.id : m \in coffer}]]
+                                 /\ messageCount' = [messageCount EXCEPT ![self] = messageCount[self]+1]
+                   ELSE /\ TRUE
+                        /\ UNCHANGED << pendingMessage, messageCount >>
+             /\ donePhase' = [donePhase EXCEPT ![self] = "start"]
+             /\ pc' = [pc EXCEPT ![self] = "lb2"]
+             /\ UNCHANGED << messages, tick, phase, L >>
+
+lb2(self) == /\ pc[self] = "lb2"
+             /\ phase = "end"
+             /\ IF tick % tAdv = tAdv - 1
+                   THEN /\ messages' = (messages \cup {(pendingMessage[self])})
+                   ELSE /\ TRUE
+                        /\ UNCHANGED messages
+             /\ donePhase' = [donePhase EXCEPT ![self] = "end"]
+             /\ pc' = [pc EXCEPT ![self] = "lb1"]
+             /\ UNCHANGED << tick, phase, pendingMessage, messageCount, L >>
+
+byz(self) == lb1(self) \/ lb2(self)
+
+Next == (\E self \in {"clock"}: clock(self))
+           \/ (\E self \in P \ B: proc(self))
+           \/ (\E self \in B: byz(self))
+
+Spec == Init /\ [][Next]_vars
+
+\* END TRANSLATION 
 
 \* Invariant describing the type of the variables:
 TypeOK ==
