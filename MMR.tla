@@ -70,7 +70,7 @@ l2:         await round = done[self]+1;
         }
     }
     process (scheduler \in {"scheduler"}) {
-        \* TODO: a scheduler that simulates dynamic participation
+        \* NOTE: this scheduler does not simulates dynamic participation
 tick:   while (TRUE) {
             await \A p \in P \ byz : done[p] = round;
             with (byzVotes \in [P \ byz -> [byz -> Seq(V) \cup {None}]])
@@ -85,94 +85,4 @@ tick:   while (TRUE) {
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "b215e9f8" /\ chksum(tla) = "80547391")
-VARIABLES pc, round, delivered, vote, proposal, received_votes, done, byz
-
-(* define statement *)
-Agreement == \A p,q \in P : Compatible(delivered[p], delivered[q])
-HeardOf(p) == {q \in P : received_votes[p][q] # None}
-TwoThirds(p,l) == \E Q \in SUBSET HeardOf(p) :
-    /\ 3*Cardinality(Q) > 2*Cardinality(HeardOf(p))
-    /\ \A q \in Q : Prefix(l, received_votes[p][q])
-MaxTwoThirds(p) ==
-    Maximal({l \in Seq(V) : TwoThirds(p, l)})
-OneThird(p,l)  == \E Q \in SUBSET HeardOf(p) :
-    /\ 3*Cardinality(Q) > Cardinality(HeardOf(p))
-    /\ \A q \in Q : Prefix(l, received_votes[p][q])
-MaxOneThird(p) ==
-    Maximal({l \in Seq(V) : OneThird(p, l)})
-
-
-vars == << pc, round, delivered, vote, proposal, received_votes, done, byz >>
-
-ProcSet == (P) \cup ({"scheduler"})
-
-Init == (* Global variables *)
-        /\ round = 1
-        /\ delivered = [p \in P |-> <<>>]
-        /\ vote = [p \in P |-> <<>>]
-        /\ proposal = [p \in P |-> None]
-        /\ received_votes = [p \in P |-> [q \in P |-> None]]
-        /\ done = [p \in P |-> 0]
-        /\ byz \in FailProneSets
-        /\ pc = [self \in ProcSet |-> CASE self \in P -> "l0"
-                                        [] self \in {"scheduler"} -> "tick"]
-
-l0(self) == /\ pc[self] = "l0"
-            /\ self \notin byz
-            /\ \E b \in V:
-                 proposal' = [proposal EXCEPT ![self] = <<b>>]
-            /\ done' = [done EXCEPT ![self] = 1]
-            /\ pc' = [pc EXCEPT ![self] = "l1"]
-            /\ UNCHANGED << round, delivered, vote, received_votes, byz >>
-
-l1(self) == /\ pc[self] = "l1"
-            /\ round = (done[self]+1) % 2
-            /\ \E l \in MaxTwoThirds(self):
-                 delivered' = [delivered EXCEPT ![self] = l]
-            /\ Assert(Cardinality(MaxOneThird(self)) = 1, 
-                      "Failure of assertion at line 54, column 13.")
-            /\ \E leader \in HeardOf(self):
-                 \E l \in MaxOneThird(self):
-                   IF Prefix(l, proposal[leader])
-                      THEN /\ vote' = [vote EXCEPT ![self] = proposal[leader]]
-                      ELSE /\ vote' = [vote EXCEPT ![self] = l]
-            /\ done' = [done EXCEPT ![self] = round]
-            /\ pc' = [pc EXCEPT ![self] = "l2"]
-            /\ UNCHANGED << round, proposal, received_votes, byz >>
-
-l2(self) == /\ pc[self] = "l2"
-            /\ round = done[self]+1
-            /\ \E l \in MaxTwoThirds(self):
-                 vote' = [vote EXCEPT ![self] = l]
-            /\ \E l \in MaxOneThird(self):
-                 \E b \in V:
-                   proposal' = [proposal EXCEPT ![self] = l \o <<b>>]
-            /\ done' = [done EXCEPT ![self] = round]
-            /\ pc' = [pc EXCEPT ![self] = "l1"]
-            /\ UNCHANGED << round, delivered, received_votes, byz >>
-
-proc(self) == l0(self) \/ l1(self) \/ l2(self)
-
-tick(self) == /\ pc[self] = "tick"
-              /\ \A p \in P \ byz : done[p] = round
-              /\ \E byzVotes \in [P \ byz -> [byz -> Seq(V) \cup {None}]]:
-                   received_votes' =               [p \in P \ byz |-> [q \in P |->
-                                     IF q \notin byz
-                                     THEN vote[q]
-                                     ELSE byzVotes[p][q]]]
-              /\ \E byzProposal \in [byz -> Seq(V)]:
-                   proposal' = [p \in P |-> IF p \notin byz THEN proposal[p] ELSE byzProposal[p]]
-              /\ round' = (round+1) % 2
-              /\ pc' = [pc EXCEPT ![self] = "tick"]
-              /\ UNCHANGED << delivered, vote, done, byz >>
-
-scheduler(self) == tick(self)
-
-Next == (\E self \in P: proc(self))
-           \/ (\E self \in {"scheduler"}: scheduler(self))
-
-Spec == Init /\ [][Next]_vars
-
-\* END TRANSLATION 
 =========================================

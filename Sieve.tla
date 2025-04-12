@@ -16,7 +16,7 @@
 (* `^Sieve.^'                                                                         *)
 (**************************************************************************************)
 
-EXTENDS FiniteSets, Integers, Utils, TLC
+EXTENDS FiniteSets, Integers, Utils
 
 (**************************************************************************************)
 (* We start by declaring constant parameters: the sets of processes P, among which    *)
@@ -234,109 +234,6 @@ lb2:        await phase = "end";
     }
 }
 *)
-\* BEGIN TRANSLATION (chksum(pcal) = "78f02d63" /\ chksum(tla) = "8d57a6b4")
-\* Label tick of process clock at line 164 col 9 changed to tick_
-VARIABLES pc, messages, tick, phase, donePhase, pendingMessage, messageCount, 
-          L
-
-vars == << pc, messages, tick, phase, donePhase, pendingMessage, messageCount, 
-           L >>
-
-ProcSet == ({"clock"}) \cup (P \ B) \cup (B)
-
-Init == (* Global variables *)
-        /\ messages = {}
-        /\ tick = 0
-        /\ phase = "start"
-        /\ donePhase = [p \in P |-> "end"]
-        /\ pendingMessage = [p \in P |-> <<>>]
-        /\ messageCount = [p \in P |-> 0]
-        /\ L = [p \in P |-> {}]
-        /\ pc = [self \in ProcSet |-> CASE self \in {"clock"} -> "tick_"
-                                        [] self \in P \ B -> "l1"
-                                        [] self \in B -> "lb1"]
-
-tick_(self) == /\ pc[self] = "tick_"
-               /\ \A p \in P : donePhase[p] = phase
-               /\ IF phase = "start"
-                     THEN /\ phase' = "end"
-                          /\ tick' = tick
-                     ELSE /\ phase' = "start"
-                          /\ tick' = tick+1
-               /\ pc' = [pc EXCEPT ![self] = "tick_"]
-               /\ UNCHANGED << messages, donePhase, pendingMessage, 
-                               messageCount, L >>
-
-clock(self) == tick_(self)
-
-l1(self) == /\ pc[self] = "l1"
-            /\ phase = "start"
-            /\ IF tick % tWB = 0
-                  THEN /\ LET msgs == {m \in messages : m.step < StepOf(tick)} IN
-                            \E coffer \in IF L[self] = {}
-                                          THEN {BootstrapSieve(msgs)}
-                                          ELSE {BootstrapSieve(msgs),OnlineSieve(StepOf(tick), msgs, L[self])}:
-                              /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
-                                                                                    id |-> <<self,messageCount[self]+1>>,
-                                                                                    step |-> StepOf(tick),
-                                                                                    coffer |-> {m.id : m \in coffer}]]
-                              /\ messageCount' = [messageCount EXCEPT ![self] = messageCount[self]+1]
-                              /\ L' = [L EXCEPT ![self] = coffer]
-                  ELSE /\ TRUE
-                       /\ UNCHANGED << pendingMessage, messageCount, L >>
-            /\ donePhase' = [donePhase EXCEPT ![self] = "start"]
-            /\ pc' = [pc EXCEPT ![self] = "l2"]
-            /\ UNCHANGED << messages, tick, phase >>
-
-l2(self) == /\ pc[self] = "l2"
-            /\ phase = "end"
-            /\ IF tick % tWB = tWB - 1
-                  THEN /\ messages' = (messages \cup {(pendingMessage[self])})
-                  ELSE /\ TRUE
-                       /\ UNCHANGED messages
-            /\ donePhase' = [donePhase EXCEPT ![self] = "end"]
-            /\ pc' = [pc EXCEPT ![self] = "l1"]
-            /\ UNCHANGED << tick, phase, pendingMessage, messageCount, L >>
-
-proc(self) == l1(self) \/ l2(self)
-
-lb1(self) == /\ pc[self] = "lb1"
-             /\ phase = "start"
-             /\ IF tick % tAdv = 0
-                   THEN /\ LET maxStep == MaxInteger({m.step : m \in messages} \cup {0}) IN
-                             \E stp \in {maxStep, maxStep+1}:
-                               \E coffer \in SUBSET {m \in messages : m.step = stp-1}:
-                                 /\ stp > 0 => coffer # {}
-                                 /\ pendingMessage' = [pendingMessage EXCEPT ![self] =                     [
-                                                                                       id |-> <<self,messageCount[self]+1>>,
-                                                                                       step |-> stp,
-                                                                                       coffer |-> {m.id : m \in coffer}]]
-                                 /\ messageCount' = [messageCount EXCEPT ![self] = messageCount[self]+1]
-                   ELSE /\ TRUE
-                        /\ UNCHANGED << pendingMessage, messageCount >>
-             /\ donePhase' = [donePhase EXCEPT ![self] = "start"]
-             /\ pc' = [pc EXCEPT ![self] = "lb2"]
-             /\ UNCHANGED << messages, tick, phase, L >>
-
-lb2(self) == /\ pc[self] = "lb2"
-             /\ phase = "end"
-             /\ IF tick % tAdv = tAdv - 1
-                   THEN /\ messages' = (messages \cup {(pendingMessage[self])})
-                   ELSE /\ TRUE
-                        /\ UNCHANGED messages
-             /\ donePhase' = [donePhase EXCEPT ![self] = "end"]
-             /\ pc' = [pc EXCEPT ![self] = "lb1"]
-             /\ UNCHANGED << tick, phase, pendingMessage, messageCount, L >>
-
-byz(self) == lb1(self) \/ lb2(self)
-
-Next == (\E self \in {"clock"}: clock(self))
-           \/ (\E self \in P \ B: proc(self))
-           \/ (\E self \in B: byz(self))
-
-Spec == Init /\ [][Next]_vars
-
-\* END TRANSLATION 
 
 \* Invariant describing the type of the variables:
 TypeOK ==
