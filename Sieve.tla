@@ -1,11 +1,6 @@
 ------------ MODULE Sieve ----------------
 
 (**************************************************************************************)
-(* TODO: add online-sieve! Perhaps non-deterministically pick online or bootstrap     *)
-(* sieve when possible                                                                *)
-(**************************************************************************************)
-
-(**************************************************************************************)
 (* `^PlusCal/TLA+^' specification of `^Sieve.^'                                       *)
 (*                                                                                    *)
 (* We specify the algorithm and its environment at a high level. This means that      *)
