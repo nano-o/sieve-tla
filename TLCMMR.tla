@@ -21,8 +21,6 @@ Constraint1 ==
     /\ round < 7
     
 MaxTwoThirdsFun == [p \in P |-> MaxTwoThirds(p)]
-\* TODO: error in watch expression with this:
-\* TwoThidrsFun == [p \in P |-> {l \in Seq(V) : TwoThirds(p,l)}]
 TwoThirdsFun == [p \in P |-> [l \in Seq(V) |->  TwoThirds(p,l)]]
 HeardOfFun == [p \in P |-> HeardOf(p)]
 MaxOneThirdFun == [p \in P |-> MaxOneThird(p)]
